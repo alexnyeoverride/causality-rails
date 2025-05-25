@@ -7,7 +7,7 @@ RSpec.describe GameChannel, type: :channel do
 
   before do
     allow_any_instance_of(GameChannel).to receive(:puts)
-    allow(ActionCable.server).to receive(:broadcast).as_null_object
+    allow(ActionCable.server).to receive(:broadcast)
   end
 
   it "successfully subscribes" do
@@ -32,7 +32,8 @@ RSpec.describe GameChannel, type: :channel do
       expect(game.current_character_id).to eq(character.id)
       expect(character.hand.count).to eq(Game::STARTING_HAND_SIZE)
 
-      expect(subscription).to have_transmitted(
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(
         type: "joined",
         game_id: game.id,
         player_secret: character.id,
@@ -66,7 +67,9 @@ RSpec.describe GameChannel, type: :channel do
         new_character = game.characters.order(:id).last
         expect(new_character.name).to eq("Joiner")
 
-        expect(joiner_subscription).to have_transmitted(
+        # Access transmissions from the joiner_subscription
+        transmitted_data = joiner_subscription.transmissions.last
+        expect(transmitted_data).to include(
           type: "joined",
           game_id: game.id,
           player_secret: new_character.id,
@@ -90,7 +93,8 @@ RSpec.describe GameChannel, type: :channel do
         expect { perform(:join_game, game_id: game.id, player_name: "Late Joiner") }
           .not_to change { game.characters.count }
 
-        expect(subscription).to have_transmitted(
+        transmitted_data = transmissions.last
+        expect(transmitted_data).to include(
           type: "error",
           message: "Cannot join game: Game is full."
         )
@@ -100,7 +104,8 @@ RSpec.describe GameChannel, type: :channel do
     it "transmits an error if game_id is invalid" do
       subscribe
       perform(:join_game, game_id: "invalid_id", player_name: "Joiner")
-      expect(subscription).to have_transmitted(
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(
         type: "error",
         message: "Game not found: invalid_id"
       )
@@ -126,7 +131,8 @@ RSpec.describe GameChannel, type: :channel do
       subscribe
       perform(:rejoin_game, game_id: game.id, player_secret: character.id)
 
-      expect(subscription).to have_transmitted(
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(
         type: "rejoined",
         game_id: game.id,
         character_id: character.id,
@@ -139,13 +145,15 @@ RSpec.describe GameChannel, type: :channel do
     it "transmits error for invalid game_id" do
       subscribe
       perform(:rejoin_game, game_id: "invalid_id", player_secret: character.id)
-      expect(subscription).to have_transmitted(type: "error", message: "Could not rejoin game. Game or character not found.")
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(type: "error", message: "Could not rejoin game. Game or character not found.")
     end
 
     it "transmits error for invalid player_secret (character_id)" do
       subscribe
       perform(:rejoin_game, game_id: game.id, player_secret: "invalid_char_id")
-      expect(subscription).to have_transmitted(type: "error", message: "Could not rejoin game. Game or character not found.")
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(type: "error", message: "Could not rejoin game. Game or character not found.")
     end
   end
 
@@ -178,7 +186,8 @@ RSpec.describe GameChannel, type: :channel do
 
     it "transmits an error if card_id is missing" do
       perform(:declare_action, {}) 
-      expect(subscription).to have_transmitted(type: "error", message: "Card ID must be provided to declare an action.")
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(type: "error", message: "Card ID must be provided to declare an action.")
     end
     
     it "transmits an error if action declaration fails preconditions (returns nil from game.declare_action)" do
@@ -187,7 +196,8 @@ RSpec.describe GameChannel, type: :channel do
       allow(Game).to receive(:find_by).with(id: game.id).and_return(current_game_in_test)
       
       perform(:declare_action, card_id: @card_to_play.id)
-      expect(subscription).to have_transmitted(type: "error", message: "Failed to declare action. Preconditions not met or action invalid.")
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(type: "error", message: "Failed to declare action. Preconditions not met or action invalid.")
     end
     
     it "transmits an error if action declaration returns AR object with errors" do
@@ -199,7 +209,8 @@ RSpec.describe GameChannel, type: :channel do
         allow(Game).to receive(:find_by).with(id: game.id).and_return(current_game_in_test)
 
         perform(:declare_action, card_id: @card_to_play.id)
-        expect(subscription).to have_transmitted(type: "error", message: "Failed to declare action: Base Custom validation failed")
+        transmitted_data = transmissions.last
+        expect(transmitted_data).to include(type: "error", message: "Failed to declare action: Base Custom validation failed")
     end
 
     it "transmits an error if player is not in a game" do
@@ -207,7 +218,8 @@ RSpec.describe GameChannel, type: :channel do
       subscription.instance_variable_set(:@current_character_id, nil)
       
       perform(:declare_action, card_id: @card_to_play.id)
-      expect(subscription).to have_transmitted(type: "error", message: "You are not in a game. Please join or create one.")
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(type: "error", message: "You are not in a game. Please join or create one.")
     end
   end
 
@@ -224,7 +236,8 @@ RSpec.describe GameChannel, type: :channel do
 
     it "allows a player to leave, transmits and broadcasts" do
       perform(:leave_game, {})
-      expect(subscription).to have_transmitted(
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(
         type: "left_game",
         game_id: game.id,
         message: "You have left the game."
@@ -239,7 +252,8 @@ RSpec.describe GameChannel, type: :channel do
       subscription.instance_variable_set(:@current_character_id, nil)
       
       perform(:leave_game, {})
-      expect(subscription).to have_transmitted(type: "error", message: "You are not in a game to leave.")
+      transmitted_data = transmissions.last
+      expect(transmitted_data).to include(type: "error", message: "You are not in a game to leave.")
     end
   end
 end
