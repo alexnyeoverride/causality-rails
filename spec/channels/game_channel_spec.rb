@@ -59,16 +59,15 @@ RSpec.describe GameChannel, type: :channel do
       it "allows a player to join, creates a character, transmits and broadcasts" do
         
         joiner_connection = stub_connection
-        joiner_subscription = subscribe(connection: joiner_connection)
+        subscribe(connection: joiner_connection)
         
-        expect { joiner_subscription.perform(:join_game, game_id: game.id, player_name: "Joiner") }
+        expect { perform(:join_game, game_id: game.id, player_name: "Joiner") }
           .to change { game.characters.count }.by(1)
 
         new_character = game.characters.order(:id).last
         expect(new_character.name).to eq("Joiner")
 
-        # Access transmissions from the joiner_subscription
-        transmitted_data = joiner_subscription.transmissions.last
+        transmitted_data = transmissions.last
         expect(transmitted_data).to include(
           type: "joined",
           game_id: game.id,
@@ -76,7 +75,7 @@ RSpec.describe GameChannel, type: :channel do
           character_id: new_character.id,
           message: "Successfully joined Game #{game.id} as Character #{new_character.id} ('Joiner')."
         )
-        expect(joiner_subscription).to have_stream_from("game_#{game.id}")
+        expect(subscription).to have_stream_from("game_#{game.id}")
         expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}", anything)
       end
     end
@@ -118,7 +117,7 @@ RSpec.describe GameChannel, type: :channel do
       another_game = Game.create!
       
       perform(:join_game, game_id: another_game.id, player_name: "Joiner Attempt")
-      expect(subscription.transmissions.last).to match(hash_including(type: "error", message: /You are already in a game/))
+      expect(transmissions.last).to match(hash_including(type: "error", message: /You are already in a game/))
     end
   end
 
@@ -166,16 +165,22 @@ RSpec.describe GameChannel, type: :channel do
       game.setup_new_game!
       game.update!(current_character_id: character.id) 
       character.reload
-      unless character.hand.cards.any? { |c| c.template_id == template1.id && c.location == 'hand' }
-         character.cards.create!(template: template1, location: 'hand', position: (character.hand.cards.maximum(:position) || -1) + 1)
-         character.reload
+
+      @card_to_play = character.hand.cards.joins(:template).find_by(templates: { id: template1.id })
+      unless @card_to_play
+        @card_to_play = character.cards.create!(
+          template: template1,
+          location: 'hand',
+          position: (character.hand.cards.maximum(:position) || -1) + 1
+        )
+        character.reload
       end
-      @card_to_play = character.hand.cards.first 
+      expect(@card_to_play).not_to be_nil, "Test setup failed: Card with template1 (ID: #{template1.id}) not found in character's hand."
       character.update!(actions_remaining: 1) 
 
       subscribe
       perform(:rejoin_game, game_id: game.id, player_secret: character.id) 
-      subscription.transmissions.clear 
+      transmissions.clear 
     end
 
     it "successfully declares an action" do
@@ -210,7 +215,7 @@ RSpec.describe GameChannel, type: :channel do
 
         perform(:declare_action, card_id: @card_to_play.id)
         transmitted_data = transmissions.last
-        expect(transmitted_data).to include(type: "error", message: "Failed to declare action: Base Custom validation failed")
+        expect(transmitted_data).to include(type: "error", message: "Failed to declare action: Custom validation failed")
     end
 
     it "transmits an error if player is not in a game" do
@@ -231,7 +236,7 @@ RSpec.describe GameChannel, type: :channel do
       game.setup_new_game!
       subscribe
       perform(:rejoin_game, game_id: game.id, player_secret: character.id) 
-      subscription.transmissions.clear
+      transmissions.clear
     end
 
     it "allows a player to leave, transmits and broadcasts" do
@@ -244,7 +249,13 @@ RSpec.describe GameChannel, type: :channel do
       )
       expect(subscription.instance_variable_get(:@current_game_id)).to be_nil
       expect(subscription.instance_variable_get(:@current_character_id)).to be_nil
-      expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}", anything)
+      expect(ActionCable.server).to have_received(:broadcast).with(
+        "game_#{game.id}",
+        hash_including(
+          type: "game_state",
+          game_state: hash_including(last_event: "Player #{character.name} has left the game.")
+        )
+      ).once
     end
 
     it "transmits an error if player is not in a game" do
