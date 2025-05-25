@@ -1,0 +1,19 @@
+{
+  "name": "app",
+  "private": true,
+  "scripts": {
+    "build": "esbuild app/javascript/application.tsx --bundle --sourcemap --outdir=app/assets/builds --public-path=/assets"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@babel/preset-react": "^7.27.1",
+    "@types/react": "^19.1.5",
+    "@types/react-dom": "^19.1.5",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19",
+    "vite-plugin-ruby": "^5.1.1"
+  }
+}
