@@ -4,7 +4,6 @@ import type { Subscription } from '@rails/actioncable';
 export interface CardData {
   id: string;
   owner_character_id: string;
-  template_id: string;
   location: 'deck' | 'hand' | 'discard' | 'table';
   position: number;
   name: string;

@@ -42,7 +42,6 @@ const Card: React.FC<CardProps> = ({ cardData, onClick, className }) => {
       <div style={{ fontSize: '0.7em', borderTop: '1px solid #eee', paddingTop: '5px' }}>
         <p style={{ margin: '2px 0' }}>Type: {cardData.resolution_timing}</p>
         <p style={{ margin: '2px 0' }}>Cost: {cardData.is_free ? 'Free' : '1 Action'}</p>
-        <p style={{ margin: '2px 0' }}>ID: {cardData.id}... ({cardData.template_id})</p>
       </div>
     </div>
   );
