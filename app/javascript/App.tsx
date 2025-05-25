@@ -1,10 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import HelloWorld from './components/HelloWorld';
+import Game from './components/Game';
+import { createConsumer } from '@rails/actioncable';
+
+const cableUrl = "/cable";
+const consumer = createConsumer(cableUrl);
+
+export default consumer;
 
 const AppRoot: React.FC = () => {
   return (
-    <HelloWorld greeting='sadf' />
+    <Game websocket={consumer} />
   );
 };
 
