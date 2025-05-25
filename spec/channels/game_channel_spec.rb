@@ -1,8 +1,8 @@
 require 'rails_helper'
 
 RSpec.describe GameChannel, type: :channel do
-  let!(:template1) { Template.create!(name: "Test Card 1", description: "Desc 1", resolution_timing: "before", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 0) }
-  let!(:template2) { Template.create!(name: "Test Card 2", description: "Desc 2", resolution_timing: "after", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 0) }
+  let!(:template1) { Template.create!(name: "Test Card 1", description: "Desc 1", resolution_timing: "before", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 1) }
+  let!(:template2) { Template.create!(name: "Test Card 2", description: "Desc 2", resolution_timing: "after", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 2, is_free: true) }
   let!(:pass_template) { Template.create!(name: "Pass", description: "Pass the turn or reaction window.", resolution_timing: "before", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "pass_effect", max_tick_count: 0, is_free: true) }
 
   it "successfully subscribes" do
@@ -301,80 +301,228 @@ RSpec.describe GameChannel, type: :channel do
 
   describe "game state payload" do
     let!(:game) { Game.create! }
-    let!(:char1) { game.characters.create!(name: "Alice") }
-    let!(:char2) { game.characters.create!(name: "Bob") }
+    let!(:char1) { game.characters.create!(name: "Alice", health: 80, actions_remaining: 1, reactions_remaining: 0) }
+    let!(:char2) { game.characters.create!(name: "Bob", health: 0) }
+    let!(:char3) { game.characters.create!(name: "Carol", health: 100) }
+
+
+    let!(:alice_card1_obj) { char1.cards.create!(template: template1, location: 'hand', position: 0) }
+    let!(:alice_card2_obj) { char1.cards.create!(template: template2, location: 'hand', position: 1) }
+    let!(:bob_card1_obj) { char2.cards.create!(template: template1, location: 'hand', position: 0) }
+    let!(:carol_deck_card) { char3.cards.create!(template: template1, location: 'deck', position: 0) }
+    let!(:carol_discard_card) { char3.cards.create!(template: template2, location: 'discard', position: 0) }
+
+
+    let!(:active_action_on_table) do
+      card_for_action = char1.cards.create!(template: template2, location: 'table', position: 0)
+      action = game.actions.create!(
+        card: card_for_action,
+        source: char1,
+        phase: 'declared',
+        resolution_timing: template2.resolution_timing,
+        is_free: template2.is_free,
+        max_tick_count: template2.max_tick_count,
+        declarability_key: template2.declarability_key,
+        tick_condition_key: template2.tick_condition_key,
+        tick_effect_key: template2.tick_effect_key
+      )
+      action.action_targets.create!(target_character: char3)
+      action
+    end
+
+    let!(:resolved_action) do
+        card_for_resolved_action = char1.cards.create!(template: template1, location: 'discard', position: 10)
+        game.actions.create!(
+            card: card_for_resolved_action,
+            source: char1,
+            phase: 'resolved',
+            resolution_timing: template1.resolution_timing,
+            is_free: template1.is_free,
+            max_tick_count: template1.max_tick_count,
+            declarability_key: template1.declarability_key,
+            tick_condition_key: template1.tick_condition_key,
+            tick_effect_key: template1.tick_effect_key
+        )
+    end
+
 
     before do
-      template1
-      template2
-      Card.where(owner_character_id: [char1.id, char2.id]).destroy_all
+      char1.cards.create!(template: template1, location: 'deck', position: 0)
+      char1.cards.create!(template: template1, location: 'deck', position: 1)
+      char1.cards.create!(template: template2, location: 'discard', position: 0)
 
-      @alice_card1_obj = char1.cards.create!(template: template1, location: 'hand', position: 0)
-      @alice_card2_obj = char1.cards.create!(template: template2, location: 'hand', position: 1)
-      @bob_card1_obj = char2.cards.create!(template: template1, location: 'hand', position: 0)
 
       game.update!(current_character_id: char1.id)
+      game.reload
       char1.reload
       char2.reload
-      game.reload
+      char3.reload
 
       allow(ActionCable.server).to receive(:broadcast)
     end
 
-    context "when Alice (char1) triggers a broadcast via rejoining" do
-      it "broadcasts Alice's view to Alice's stream and Bob's view to Bob's stream" do
+    context "when Alice (char1) triggers a broadcast (e.g. by rejoining)" do
+      it "broadcasts comprehensive game state to all character streams" do
         subscribe(character_id: char1.id)
         perform(:rejoin_game, game_id: game.id, player_secret: char1.id)
 
-        alice_data_in_alice_payload = hash_including(
+        expected_alice_payload_for_alice = {
           id: char1.id,
           name: "Alice",
+          health: 80,
+          actions_remaining: 1,
+          reactions_remaining: 0,
           hand_card_count: 2,
+          deck_card_count: 2,
+          discard_pile_card_count: 2,
+          is_current_player: true,
+          is_alive: true,
           hand_cards: match_array([
-            hash_including(id: @alice_card1_obj.id, name: template1.name, description: template1.description),
-            hash_including(id: @alice_card2_obj.id, name: template2.name, description: template2.description)
+            {id: alice_card1_obj.id, name: template1.name, description: template1.description},
+            {id: alice_card2_obj.id, name: template2.name, description: template2.description}
           ])
-        )
-        bob_data_in_alice_payload = hash_including(
+        }
+
+        expected_bob_payload_for_alice = {
           id: char2.id,
           name: "Bob",
-          hand_card_count: 1
-        )
-
-
-        alice_data_in_bob_payload = hash_including(
-          id: char1.id,
-          name: "Alice",
-          hand_card_count: 2
-        )
-
-        bob_data_in_bob_payload = hash_including(
-          id: char2.id,
-          name: "Bob",
+          health: 0,
+          actions_remaining: Character::DEFAULT_ACTIONS,
+          reactions_remaining: Character::DEFAULT_REACTIONS,
           hand_card_count: 1,
-          hand_cards: match_array([
-            hash_including(id: @bob_card1_obj.id, name: template1.name, description: template1.description)
-          ])
-        )
+          deck_card_count: 0,
+          discard_pile_card_count: 0,
+          is_current_player: false,
+          is_alive: false
+        }
+
+        expected_carol_payload_for_alice = {
+            id: char3.id,
+            name: "Carol",
+            health: 100,
+            actions_remaining: Character::DEFAULT_ACTIONS,
+            reactions_remaining: Character::DEFAULT_REACTIONS,
+            hand_card_count: 0,
+            deck_card_count: 1,
+            discard_pile_card_count: 1,
+            is_current_player: false,
+            is_alive: true
+        }
+
+        expected_active_actions_payload = [
+          hash_including(
+            id: active_action_on_table.id,
+            card_id: active_action_on_table.card_id,
+            card_name: template2.name,
+            source_id: char1.id,
+            source_name: "Alice",
+            phase: "declared",
+            trigger_id: nil,
+            resolution_timing: template2.resolution_timing.to_s,
+            is_free: template2.is_free,
+            max_tick_count: template2.max_tick_count,
+            target_character_ids: [char3.id]
+          )
+        ]
 
         expect(ActionCable.server).to have_received(:broadcast).with(
           "game_#{game.id}_character_#{char1.id}",
-          hash_including(
-            type: "game_state",
-            game_state: hash_including(
-              characters: match_array([alice_data_in_alice_payload, bob_data_in_alice_payload]),
-              current_character_id: char1.id
-            )
-          )
+          lambda { |payload|
+            expect(payload[:type]).to eq("game_state")
+            game_state = payload[:game_state]
+            expect(game_state[:id]).to eq(game.id)
+            expect(game_state[:current_character_id]).to eq(char1.id)
+            expect(game_state[:characters]).to match_array([
+              hash_including(expected_alice_payload_for_alice),
+              hash_including(expected_bob_payload_for_alice),
+              hash_including(expected_carol_payload_for_alice)
+            ])
+            game_state[:characters].each do |char_data|
+                if char_data[:id] == char2.id || char_data[:id] == char3.id
+                    expect(char_data).not_to have_key(:hand_cards)
+                end
+            end
+            expect(game_state[:active_actions]).to match_array(expected_active_actions_payload)
+            expect(game_state[:is_over]).to be false
+          }
         )
+
+        expected_alice_payload_for_bob = {
+          id: char1.id,
+          name: "Alice",
+          health: 80,
+          actions_remaining: 1,
+          reactions_remaining: 0,
+          hand_card_count: 2,
+          deck_card_count: 2,
+          discard_pile_card_count: 2,
+          is_current_player: true,
+          is_alive: true
+        }
+
+        expected_bob_payload_for_bob = {
+          id: char2.id,
+          name: "Bob",
+          health: 0,
+          actions_remaining: Character::DEFAULT_ACTIONS,
+          reactions_remaining: Character::DEFAULT_REACTIONS,
+          hand_card_count: 1,
+          deck_card_count: 0,
+          discard_pile_card_count: 0,
+          is_current_player: false,
+          is_alive: false,
+          hand_cards: match_array([
+             {id: bob_card1_obj.id, name: template1.name, description: template1.description}
+          ])
+        }
+        expected_carol_payload_for_bob = {
+            id: char3.id,
+            name: "Carol",
+            health: 100,
+            actions_remaining: Character::DEFAULT_ACTIONS,
+            reactions_remaining: Character::DEFAULT_REACTIONS,
+            hand_card_count: 0,
+            deck_card_count: 1,
+            discard_pile_card_count: 1,
+            is_current_player: false,
+            is_alive: true
+        }
+
 
         expect(ActionCable.server).to have_received(:broadcast).with(
           "game_#{game.id}_character_#{char2.id}",
+          lambda { |payload|
+            expect(payload[:type]).to eq("game_state")
+            game_state = payload[:game_state]
+            expect(game_state[:id]).to eq(game.id)
+            expect(game_state[:current_character_id]).to eq(char1.id)
+            expect(game_state[:characters]).to match_array([
+              hash_including(expected_alice_payload_for_bob),
+              hash_including(expected_bob_payload_for_bob),
+              hash_including(expected_carol_payload_for_bob)
+            ])
+            game_state[:characters].each do |char_data|
+                if char_data[:id] == char1.id || char_data[:id] == char3.id
+                    expect(char_data).not_to have_key(:hand_cards)
+                end
+            end
+            expect(game_state[:active_actions]).to match_array(expected_active_actions_payload)
+            expect(game_state[:is_over]).to be false
+          }
+        )
+        
+        char1.update!(health: 0)
+        game.reload
+        
+        subscribe(character_id: char3.id)
+        perform(:rejoin_game, game_id: game.id, player_secret: char3.id)
+        
+        expect(ActionCable.server).to have_received(:broadcast).with(
+          "game_#{game.id}_character_#{char3.id}",
           hash_including(
             type: "game_state",
             game_state: hash_including(
-              characters: match_array([alice_data_in_bob_payload, bob_data_in_bob_payload]),
-              current_character_id: char1.id
+              is_over: true
             )
           )
         )

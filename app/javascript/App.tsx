@@ -6,7 +6,6 @@ import { createConsumer } from '@rails/actioncable';
 const cableUrl = "/cable";
 const consumer = createConsumer(cableUrl);
 
-export default consumer;
 
 const AppRoot: React.FC = () => {
   return (
@@ -23,3 +22,5 @@ if (container) {
     </React.StrictMode>
   );
 }
+
+export default consumer;

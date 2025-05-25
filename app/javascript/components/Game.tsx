@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import useGameStore from '../store';
 import type { Consumer, Subscription } from '@rails/actioncable';
+import GameView from './GameView';
 
 interface GameProps {
   websocket: Consumer;
@@ -8,12 +9,10 @@ interface GameProps {
 
 const Game: React.FC<GameProps> = ({ websocket }) => {
   const {
-    subscription,
     isConnected,
     gameId,
     characterId,
     playerSecret,
-    gameState,
     error,
     lastMessage,
     setSubscription,
@@ -31,8 +30,11 @@ const Game: React.FC<GameProps> = ({ websocket }) => {
   const currentSubscriptionRef = useRef<Subscription | null>(null);
 
   useEffect(() => {
-    if (!websocket || currentSubscriptionRef.current) {
+    if (!websocket) {
       return;
+    }
+    if (currentSubscriptionRef.current && currentSubscriptionRef.current.consumer === websocket){
+        return;
     }
 
     const subParams: { channel: string; game_id?: string; player_secret?: string } = {
@@ -42,26 +44,29 @@ const Game: React.FC<GameProps> = ({ websocket }) => {
     const newSub = websocket.subscriptions.create(subParams, {
       connected: () => {
         setConnected(true);
-        setLastMessage('Connected to GameChannel.');
+        setLastMessage('Socket connected. Create, join or rejoin a game.');
       },
       disconnected: () => {
         setConnected(false);
-        setLastMessage('Disconnected from GameChannel.');
+        setLastMessage('Socket disconnected.');
         if (currentSubscriptionRef.current === newSub) {
           currentSubscriptionRef.current = null;
           setSubscription(null);
         }
       },
       received: (data: any) => {
-        setLastMessage(`Received: ${JSON.stringify(data)}`);
+        setLastMessage(`Received: ${JSON.stringify(data, null, 2).substring(0, 300)}...`);
         switch (data.type) {
           case 'joined':
           case 'rejoined':
             setGameDetails({
               gameId: data.game_id,
               characterId: data.character_id,
-              playerSecret: data.player_secret || useGameStore.getState().characterId || '',
+              playerSecret: data.player_secret || useGameStore.getState().playerSecret || '',
             });
+            if (data.game_state) {
+                 setGameState(data.game_state);
+            }
             setLastMessage(data.message);
             setError(null);
             break;
@@ -96,141 +101,68 @@ const Game: React.FC<GameProps> = ({ websocket }) => {
         newSub.unsubscribe();
         if (currentSubscriptionRef.current === newSub) {
           currentSubscriptionRef.current = null;
-          setSubscription(null);
-          setConnected(false);
         }
       }
     };
   }, [websocket, setSubscription, setConnected, setGameDetails, setGameState, setError, setLastMessage, resetConnection]);
 
 
-  const handleCreateGame = () => performAction('create_game', { player_name: playerName });
-  const handleJoinGame = () => {
-    if (joinGameIdInput) {
-      performAction('join_game', { game_id: joinGameIdInput, player_name: playerName });
+  const handleCreateGame = () => {
+    if(currentSubscriptionRef.current) {
+        currentSubscriptionRef.current.perform('create_game', { player_name: playerName });
     } else {
-      setError("Please enter a Game ID to join.");
+        setError("Websocket subscription not available to create game.");
+    }
+  }
+  const handleJoinGame = () => {
+    if (joinGameIdInput && currentSubscriptionRef.current) {
+      currentSubscriptionRef.current.perform('join_game', { game_id: joinGameIdInput, player_name: playerName });
+    } else {
+      setError("Please enter a Game ID to join or subscription not available.");
     }
   };
 
   const handleRejoinGame = () => {
-    if (gameId && playerSecret && websocket) {
-      if (currentSubscriptionRef.current) {
-        currentSubscriptionRef.current.unsubscribe();
-        currentSubscriptionRef.current = null;
-        setSubscription(null);
-      }
+    const storedGameId = useGameStore.getState().gameId;
+    const storedPlayerSecret = useGameStore.getState().playerSecret;
 
-      const rejoinSub = websocket.subscriptions.create({
-        channel: 'GameChannel', game_id: gameId, player_secret: playerSecret
-      }, {
-        connected: () => { setConnected(true); setLastMessage(`Reconnected to Game ${gameId}`); },
-        disconnected: () => {
-            setConnected(false); setLastMessage('Disconnected.');
-            if (currentSubscriptionRef.current === rejoinSub) {
-                currentSubscriptionRef.current = null;
-                setSubscription(null);
-            }
-        },
-        received: (data: any) => {
-          setLastMessage(`Received: ${JSON.stringify(data)}`);
-          switch (data.type) {
-            case 'joined': case 'rejoined':
-              setGameDetails({ gameId: data.game_id, characterId: data.character_id, playerSecret: data.player_secret || useGameStore.getState().playerSecret || '' });
-              setLastMessage(data.message); setError(null); break;
-            case 'game_state': setGameState(data.game_state); break;
-            case 'error': setError(data.message); break;
-            case 'left_game': setLastMessage(data.message);
-              const subToClose = useGameStore.getState().subscription;
-              if (subToClose && subToClose === currentSubscriptionRef.current) {
-                subToClose.unsubscribe();
-              }
-              resetConnection();
-              currentSubscriptionRef.current = null;
-              setSubscription(null); break;
-            default: setLastMessage(`Received unhandled data type: ${data.type}`); break;
-          }
-        }
-      });
-      currentSubscriptionRef.current = rejoinSub;
-      setSubscription(rejoinSub);
+    if (storedGameId && storedPlayerSecret && currentSubscriptionRef.current) {
+      currentSubscriptionRef.current.perform('rejoin_game', { game_id: storedGameId, player_secret: storedPlayerSecret });
     } else {
-      setError("Need Game ID, Player Secret, and websocket connection to rejoin.");
+      setError("Need Game ID and Player Secret to rejoin, or subscription not available.");
     }
   };
 
   const handleLeaveGame = () => {
-    const sub = useGameStore.getState().subscription;
-    if (sub) {
-      performAction('leave_game');
-    } else {
-      setError("Not subscribed to a game to leave.");
-    }
+    performAction('leave_game');
   };
 
-  const handleDeclarePassAction = () => {
-    const currentCharacter = gameState?.characters.find(c => c.id === characterId);
-    const passCard = currentCharacter?.hand_cards?.find(card => card.name === "Pass");
-    if (passCard) {
-      performAction('declare_action', { card_id: passCard.id });
-    } else {
-      setError("Pass card not found in hand or not your turn.");
-    }
-  };
+
+  if (isConnected && gameId && characterId) {
+    return <GameView />;
+  }
+
   return (
-    <div>
-      <h2>Game Component</h2>
-      <p>Status: {isConnected ? 'Connected' : 'Disconnected'}</p>
+    <div style={{padding: '20px', maxWidth: '600px', margin: 'auto', fontFamily: 'Arial, sans-serif'}}>
+      <h2>Game Lobby</h2>
+      <p>Status: {isConnected ? 'Socket Connected' : 'Socket Disconnected'}</p>
       {error && <p style={{ color: 'red' }}>Error: {error}</p>}
-      {lastMessage && <p>Last Message: {lastMessage}</p>}
+      {lastMessage && <p style={{color: 'gray', fontSize: '0.9em'}}>Last Message: {lastMessage}</p>}
 
-      {!gameId && (
-        <>
-          <div>
-            <label>Player Name: </label>
-            <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} />
-          </div>
-          <button onClick={handleCreateGame} disabled={!isConnected || !!gameId || !websocket}>Create Game</button>
-          <hr />
-          <div>
-            <label>Game ID to Join: </label>
-            <input type="text" value={joinGameIdInput} onChange={(e) => setJoinGameIdInput(e.target.value)} />
-          </div>
-          <button onClick={handleJoinGame} disabled={!isConnected || !!gameId || !websocket}>Join Game</button>
-        </>
-      )}
-
-      {gameId && (
-        <div>
-          <p>Game ID: {gameId}</p>
-          <p>My Character ID: {characterId}</p>
-          <p>My Player Secret: {playerSecret}</p>
-          <button onClick={handleRejoinGame} disabled={!isConnected || !websocket}>Rejoin with Stored Details</button>
-          <button onClick={handleLeaveGame} disabled={!isConnected || !websocket}>Leave Game</button>
-          <button onClick={handleDeclarePassAction} disabled={!isConnected || !gameState || gameState.current_character_id !== characterId || !websocket}>Declare Pass Action</button>
-        </div>
-      )}
-
-      {gameState && (
-        <div>
-          <h3>Game State</h3>
-          <p>Current Turn: Character {gameState.current_character_id}</p>
-          <p>Last Event: {gameState.last_event}</p>
-          <h4>Players:</h4>
-          <ul>
-            {gameState.characters.map(char => (
-              <li key={char.id} style={{ fontWeight: char.id === characterId ? 'bold' : 'normal' }}>
-                {char.name} (ID: {char.id}, Cards: {char.hand_card_count})
-                {char.id === characterId && char.hand_cards && (
-                  <ul>
-                    {char.hand_cards.map(card => <li key={card.id}>{card.name}: {card.description}</li>)}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <div>
+        <label>Player Name: </label>
+        <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} style={{margin: '5px', padding: '8px'}} />
+      </div>
+      <button onClick={handleCreateGame} disabled={!isConnected} style={{margin: '5px', padding: '10px'}}>Create Game</button>
+      <hr style={{margin: '20px 0'}} />
+      <div>
+        <label>Game ID to Join: </label>
+        <input type="text" value={joinGameIdInput} onChange={(e) => setJoinGameIdInput(e.target.value)} style={{margin: '5px', padding: '8px'}}/>
+      </div>
+      <button onClick={handleJoinGame} disabled={!isConnected} style={{margin: '5px', padding: '10px'}}>Join Game</button>
+      <hr style={{margin: '20px 0'}} />
+       <button onClick={handleRejoinGame} disabled={!isConnected || !useGameStore.getState().gameId || !useGameStore.getState().playerSecret } style={{margin: '5px', padding: '10px'}}>Rejoin Last Game</button>
+      {gameId && <button onClick={handleLeaveGame} disabled={!isConnected} style={{margin: '5px', padding: '10px', backgroundColor: 'darkred', color: 'white'}}>Leave Current Game</button>}
     </div>
   );
 };
