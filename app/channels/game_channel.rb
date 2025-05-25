@@ -1,23 +1,12 @@
 class GameChannel < ApplicationCable::Channel
-  MAX_PLAYERS_PER_GAME = 3
-
   def subscribed
     @connection_uuid = SecureRandom.uuid
-    puts "Client #{@connection_uuid} attempting to subscribe to GameChannel."
   end
 
   def unsubscribed
     if @current_character_id && @current_game_id
       character = Character.find_by(id: @current_character_id)
       game = Game.find_by(id: @current_game_id) 
-
-      if character && game
-        puts "Player Character #{@current_character_id} (Connection #{@connection_uuid}) unsubscribed from Game #{@current_game_id}."
-      else
-        puts "Client #{@connection_uuid} (Character #{@current_character_id}, Game #{@current_game_id}) unsubscribed, but character or game not found."
-      end
-    else
-      puts "Client #{@connection_uuid} unsubscribed (was not in a game)."
     end
     stop_all_streams
   end
@@ -43,12 +32,10 @@ class GameChannel < ApplicationCable::Channel
         character_id: @current_character_id,
         message: "Game created successfully. You are Character #{character.id} ('#{character.name}')."
       })
-      puts "Game #{@current_game_id} created by Character #{@current_character_id} (Connection #{@connection_uuid})"
       broadcast_game_state(@current_game_id)
     end
   rescue ActiveRecord::RecordInvalid => e
     transmit_error("Failed to create game: #{e.message}")
-    puts "Error creating game for Connection #{@connection_uuid}: #{e.message}"
   end
 
   def join_game(data)
@@ -65,7 +52,7 @@ class GameChannel < ApplicationCable::Channel
       return
     end
     
-    if game.characters.count >= MAX_PLAYERS_PER_GAME
+    if game.characters.count >= Game::MAX_PLAYERS
       transmit_error("Cannot join game: Game is full.")
       return
     end
@@ -87,12 +74,10 @@ class GameChannel < ApplicationCable::Channel
         character_id: @current_character_id,
         message: "Successfully joined Game #{game.id} as Character #{character.id} ('#{character.name}')."
       })
-      puts "Character #{@current_character_id} (Connection #{@connection_uuid}) joined Game #{@current_game_id}"
       broadcast_game_state(@current_game_id)
     end
   rescue ActiveRecord::RecordInvalid => e
     transmit_error("Failed to join game: #{e.message}")
-    puts "Error joining game for Connection #{@connection_uuid} to Game #{game_id}: #{e.message}"
   end
 
   def rejoin_game(data)
@@ -114,7 +99,6 @@ class GameChannel < ApplicationCable::Channel
         character_id: @current_character_id,
         message: "Successfully rejoined Game #{game.id} as Character #{character.id} ('#{character.name}')."
       })
-      puts "Character #{@current_character_id} (Connection #{@connection_uuid}) rejoined Game #{@current_game_id}"
       broadcast_game_state(@current_game_id)
     else
       transmit_error("Could not rejoin game. Game or character not found.")
@@ -150,19 +134,16 @@ class GameChannel < ApplicationCable::Channel
         trigger_action_id: trigger_action_id
       )
 
-      if declared_action&.persisted? 
+      if declared_action.persisted? 
         source_character_name = Character.find(@current_character_id).name
-        puts "Character #{@current_character_id} in Game #{@current_game_id} successfully declared Action #{declared_action.id}."
         broadcast_game_state(@current_game_id, "Action #{declared_action.id} declared by #{source_character_name}.")
-      elsif declared_action.is_a?(Action) && !declared_action.persisted? && declared_action.errors.any?
+      elsif declared_action.errors.any?
         transmit_error("Failed to declare action: #{declared_action.errors.full_messages.join(', ')}")
       else
-        transmit_error("Failed to declare action. Preconditions not met or action invalid.")
-        puts "Action declaration by Character #{@current_character_id} in Game #{@current_game_id} failed or was invalid."
+        transmit_error("Failed to declare action. Action was not persisted and had no errors (this indicates an unexpected state and potential bug in Game#declare_action).")
       end
     rescue StandardError => e
       transmit_error("An unexpected error occurred while declaring action: #{e.message}")
-      puts "Unexpected error in declare_action for Character #{@current_character_id}: #{e.class} - #{e.message}\n#{e.backtrace.first(5).join("\n")}"
     end
   end
 
@@ -176,7 +157,6 @@ class GameChannel < ApplicationCable::Channel
     character = Character.find_by(id: @current_character_id) 
 
     if game && character 
-      puts "Character #{@current_character_id} (#{character.name}, Connection #{@connection_uuid}) is leaving Game #{@current_game_id}."
       
       stop_stream_from "game_#{@current_game_id}"
       
@@ -204,6 +184,7 @@ class GameChannel < ApplicationCable::Channel
     ).find_by(id: game_id)
     return unless game
 
+    # TODO: only showing the count of cards in each player's hand is correct, except for needing to show the full hand belonging to this player.
     game_state_payload = {
       id: game.id,
       current_character_id: game.current_character_id,
@@ -244,15 +225,9 @@ class GameChannel < ApplicationCable::Channel
       type: "game_state",
       game_state: game_state_payload
     })
-    puts "Broadcasted game state for Game #{game_id}."
   end
 
   def transmit_error(message)
     transmit({ type: "error", message: message })
-    error_context = "Client #{@connection_uuid}"
-    if @current_character_id
-      error_context += " (Character #{@current_character_id}, Game #{@current_game_id || 'N/A'})"
-    end
-    puts "Error for #{error_context}: #{message}"
   end
 end

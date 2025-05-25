@@ -59,23 +59,39 @@ RSpec.describe Causality, type: :integration do
   let(:game_context) { { game: game } }
 
   describe '#add' do
+    let(:action_instance) do
+      action = Action.new(game: game, card: card_attack_c1, source: char1)
+      action.initialize_from_template_and_attributes(
+        template_attack,
+        char1,
+        { target_ids: [char2.id] }
+      )
+      action
+    end
+
     before(:each) do
       game.update!(current_character: char1)
     end
 
     it 'adds an action successfully' do
-      action = causality.add(source_character_id: char1.id, card_id: card_attack_c1.id, target_ids: [char2.id])
-      expect(action).to be_a(Action)
-      expect(action).to be_persisted
-      expect(action.source).to eq(char1)
-      expect(action.card).to eq(card_attack_c1)
-      expect(action.targets.map(&:id)).to eq([char2.id])
+      returned_action = causality.add(action_to_save: action_instance)
+      expect(returned_action).to eq(action_instance)
+      expect(returned_action).to be_persisted
+      expect(returned_action.errors).to be_empty
+      expect(returned_action.source).to eq(char1)
+      expect(returned_action.card).to eq(card_attack_c1)
+      expect(returned_action.targets.map(&:id)).to eq([char2.id])
     end
 
-    it 'returns nil if card not in hand' do
-      card_attack_c1.update!(location: 'deck')
-      action = causality.add(source_character_id: char1.id, card_id: card_attack_c1.id)
-      expect(action).to be_nil
+    it 'returns an unpersisted action with errors if save fails' do
+      allow(action_instance).to receive(:save).and_return(false)
+      action_instance.errors.add(:base, "Simulated save failure")
+
+      returned_action = causality.add(action_to_save: action_instance)
+      expect(returned_action).to eq(action_instance)
+      expect(returned_action).not_to be_persisted
+      expect(returned_action.errors).not_to be_empty
+      expect(returned_action.errors[:base]).to include("Simulated save failure")
     end
   end
 
@@ -85,10 +101,16 @@ RSpec.describe Causality, type: :integration do
     end
 
     it 'returns the earliest non-Pass declared action' do
-      action1 = causality.add(source_character_id: char1.id, card_id: card_attack_c1.id)
-      pass_action = char1.actions_taken.build(card: card_pass_c1, source: char1, phase: 'declared')
-      pass_action.initialize_from_template_and_attributes(template_pass, char1)
-      pass_action.save!
+      action1_to_save = Action.new
+      action1_to_save.card = card_attack_c1
+      action1_to_save.initialize_from_template_and_attributes(template_attack, char1)
+      action1 = causality.add(action_to_save: action1_to_save)
+
+      pass_action_card = char1.cards.create!(template: template_pass, location: 'hand', position: 2)
+      pass_action_to_save = Action.new
+      pass_action_to_save.card = pass_action_card
+      pass_action_to_save.initialize_from_template_and_attributes(template_pass, char1)
+      causality.add(action_to_save: pass_action_to_save)
 
       expect(causality.get_next_trigger).to eq(action1)
     end
@@ -101,14 +123,14 @@ RSpec.describe Causality, type: :integration do
 
     context 'basic cases' do
       it 'returns a "reacted_to" action that can tick' do
-        action = char1.actions_taken.build(card: card_attack_c1, source: char1, phase: 'reacted_to')
+        action = Action.new(card: card_attack_c1, source: char1, game: game, phase: 'reacted_to')
         action.initialize_from_template_and_attributes(template_attack, char1)
         action.save!
         expect(causality.get_next_tickable).to eq(action)
       end
 
       it 'returns a "Pass" action in "declared" phase that can tick' do
-        pass_action = char1.actions_taken.build(card: card_pass_c1, source: char1, phase: 'declared')
+        pass_action = Action.new(card: card_pass_c1, source: char1, game: game, phase: 'declared')
         pass_action.initialize_from_template_and_attributes(template_pass, char1)
         pass_action.save!
         expect(causality.get_next_tickable).to eq(pass_action)
@@ -117,21 +139,21 @@ RSpec.describe Causality, type: :integration do
 
     context 'with triggers and reactions' do
       let!(:main_action) {
-        a = char1.actions_taken.build(card: card_attack_c1, source: char1, phase: 'reacted_to', resolution_timing: 'before')
+        a = Action.new(card: card_attack_c1, source: char1, game: game, phase: 'reacted_to', resolution_timing: 'before')
         a.initialize_from_template_and_attributes(template_attack, char1)
         a.save!
         a
       }
 
       it 'returns a "before" reaction if its trigger is not yet resolved and it can tick' do
-        reaction_before = char2.actions_taken.build(card: card_react_c2, source: char2, trigger: main_action, phase: 'reacted_to', resolution_timing: 'before')
+        reaction_before = Action.new(card: card_react_c2, source: char2, game: game, trigger: main_action, phase: 'reacted_to', resolution_timing: 'before')
         reaction_before.initialize_from_template_and_attributes(template_react_before, char2, {trigger_id: main_action.id})
         reaction_before.save!
         expect(causality.get_next_tickable).to eq(reaction_before)
       end
 
       it 'returns an "after" reaction only if its trigger is resolved' do
-        reaction_after = char2.actions_taken.build(card: card_react_after_c2, source: char2, trigger: main_action, phase: 'reacted_to', resolution_timing: 'after')
+        reaction_after = Action.new(card: card_react_after_c2, source: char2, game: game, trigger: main_action, phase: 'reacted_to', resolution_timing: 'after')
         reaction_after.initialize_from_template_and_attributes(template_react_after, char2, {trigger_id: main_action.id})
         reaction_after.save!
 
@@ -151,11 +173,11 @@ RSpec.describe Causality, type: :integration do
     end
 
     let!(:actionA) {
-      a = char1.actions_taken.build(card: actionA_card, source: char1, phase: 'reacted_to')
+      a = Action.new(card: actionA_card, source: char1, game: game, phase: 'reacted_to')
       a.initialize_from_template_and_attributes(template_attack, char1); a.save!; a
     }
     let!(:reactionB) {
-      b = char2.actions_taken.build(card: reactionB_card, source: char2, trigger: actionA, phase: 'reacted_to')
+      b = Action.new(card: reactionB_card, source: char2, game: game, trigger: actionA, phase: 'reacted_to')
       b.initialize_from_template_and_attributes(template_react_before, char2, {trigger_id: actionA.id}); b.save!; b
     }
 

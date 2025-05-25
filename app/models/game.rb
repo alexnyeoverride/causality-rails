@@ -6,7 +6,7 @@ class Game < ApplicationRecord
 
   STARTING_HAND_SIZE = 5
   CARDS_PER_TEMPLATE_IN_DECK = 2
-  MAX_PLAYERS = 2
+  MAX_PLAYERS = 3
 
   def initiative
     @initiative ||= Initiative.new(self)
@@ -31,7 +31,7 @@ class Game < ApplicationRecord
           end
         end
         Card.insert_all(deck_cards_to_create) if deck_cards_to_create.any?
-        
+
         character.shuffle_deck!
         character.draw_cards_from_deck!(STARTING_HAND_SIZE)
         character.reset_turn_resources!
@@ -44,38 +44,69 @@ class Game < ApplicationRecord
   end
 
   def declare_action(source_character_id:, card_id:, target_ids: [], trigger_action_id: nil)
+    action_to_process = Action.new(game: self)
+
     source_character = self.characters.find_by(id: source_character_id)
-    return nil unless source_character
+    unless source_character
+      action_to_process.errors.add(:base, "Source character not found.")
+      return action_to_process
+    end
+    action_to_process.source = source_character
 
     card_record = source_character.cards.find_by(id: card_id)
-    return nil unless card_record
+    unless card_record
+      action_to_process.errors.add(:base, "Card not found for character.")
+      return action_to_process
+    end
+    action_to_process.card = card_record
 
-    declared_action = nil
+    action_to_process.initialize_from_template_and_attributes(
+      card_record.template,
+      source_character,
+      { trigger_id: trigger_action_id, target_ids: target_ids }
+    )
+
+    unless source_character.alive?
+      action_to_process.errors.add(:base, "Source character is not alive.")
+      return action_to_process
+    end
+
+    unless source_character.find_card_in_hand(card_record.id)
+      action_to_process.errors.add(:base, "Card not in player's hand.")
+      return action_to_process
+    end
+
+    unless source_character.can_afford_action?(action_to_process)
+      action_to_process.errors.add(:base, "Character cannot afford this action.")
+      return action_to_process
+    end
+
+    game_context = { game: self }
+    unless action_to_process.can_declare?(game_context)
+      action_to_process.errors.add(:base, "Action cannot be declared at this time (preconditions failed).")
+      return action_to_process
+    end
+
     ActiveRecord::Base.transaction do
-      declared_action = causality.add(
-        source_character_id: source_character_id,
-        card_id: card_record.id,
-        target_ids: target_ids,
-        trigger_id: trigger_action_id
-      )
+      causality.add(action_to_save: action_to_process)
 
-      return nil unless declared_action
+      if action_to_process.persisted?
+        max_pos_on_table = Card.where(owner_character_id: source_character.id, location: 'table').maximum(:position) || -1
+        new_pos_on_table = max_pos_on_table + 1
+        card_to_move = action_to_process.card
+        card_to_move.update!(location: 'table', position: new_pos_on_table)
 
-      max_pos_on_table = Card.where(owner_character_id: source_character.id, location: 'table').maximum(:position) || -1
-      new_pos_on_table = max_pos_on_table + 1
-      card_to_move = declared_action.card
-      card_to_move.update!(location: 'table', position: new_pos_on_table)
+        spent_last_of_resource = source_character.spend_resource_for_action!(action_to_process)
 
-      spent_last_of_resource = source_character.spend_resource_for_action!(declared_action)
-
-      if spent_last_of_resource
-        is_reaction = !declared_action.trigger_id.nil?
-        initiative.advance!(is_reaction_phase: is_reaction)
-        self.reload
+        if spent_last_of_resource
+          is_reaction = !action_to_process.trigger_id.nil?
+          initiative.advance!(is_reaction_phase: is_reaction)
+          self.reload
+        end
       end
     end
 
-    if declared_action&.persisted?
+    if action_to_process.persisted?
       no_pending_triggers = causality.get_next_trigger.nil?
       all_characters_out_of_reactions = self.characters.alive.all? { |c| c.reactions_remaining == 0 }
 
@@ -84,7 +115,7 @@ class Game < ApplicationRecord
       end
     end
 
-    declared_action
+    return action_to_process
   end
 
   def process_actions!

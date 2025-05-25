@@ -5,51 +5,13 @@ class Causality
     @game = game
   end
 
-  def add(source_character_id:, card_id:, target_ids: [], trigger_id: nil)
-    source_character = game.characters.find_by(id: source_character_id)
-    return nil unless source_character&.alive?
+  def add(action_to_save:)
+    action_to_save.save
 
-    card = source_character.cards.find_by(id: card_id)
-    return nil unless card
-
-    card_in_hand = source_character.find_card_in_hand(card.id)
-    return nil unless card_in_hand
-
-    template = card.template
-
-    prospective_action_for_resource_check = Action.new(
-      trigger_id: trigger_id,
-      is_free: template.is_free
-    )
-    unless source_character.can_afford_action?(prospective_action_for_resource_check)
-      return nil
+    if action_to_save.persisted?
+      check_and_advance_trigger_phase(action_to_save.trigger_id) if action_to_save.trigger_id.present?
     end
-
-    prospective_action_for_declaration = Action.new
-    prospective_action_for_declaration.card = card
-    prospective_action_for_declaration.initialize_from_template_and_attributes(
-        template,
-        source_character,
-        { trigger_id: trigger_id, target_ids: target_ids }
-    )
-
-    game_context = { game: @game }
-    unless prospective_action_for_declaration.can_declare?(game_context)
-      return nil
-    end
-
-    action = Action.new
-    action.card = card
-    action.initialize_from_template_and_attributes(
-      template,
-      source_character,
-      { trigger_id: trigger_id, target_ids: target_ids }
-    )
-
-    return nil unless action.save
-
-    check_and_advance_trigger_phase(trigger_id) if trigger_id.present?
-    action
+    action_to_save
   end
 
   def get_next_tickable
@@ -136,7 +98,7 @@ class Causality
       WITH RECURSIVE failed_chain AS (
         SELECT id, card_id, source_id, game_id
         FROM actions
-        WHERE id = $1 AND game_id = $2 -- Modified line
+        WHERE id = $1 AND game_id = $2
         UNION ALL
         SELECT r.id, r.card_id, r.source_id, r.game_id
         FROM actions r
