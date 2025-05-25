@@ -1,8 +1,8 @@
 require 'rails_helper'
 
 RSpec.describe GameChannel, type: :channel do
-  let!(:template1) { Template.create!(name: "Test Card 1", description: "desc", resolution_timing: "before", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 0) }
-  let!(:template2) { Template.create!(name: "Test Card 2", description: "desc", resolution_timing: "after", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 0) }
+  let!(:template1) { Template.create!(name: "Test Card 1", description: "Desc 1", resolution_timing: "before", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 0) }
+  let!(:template2) { Template.create!(name: "Test Card 2", description: "Desc 2", resolution_timing: "after", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "default_tick_effect", max_tick_count: 0) }
   let!(:pass_template) { Template.create!(name: "Pass", description: "Pass the turn or reaction window.", resolution_timing: "before", declarability_key: "default_declarability", tick_condition_key: "default_tick_condition", tick_effect_key: "pass_effect", max_tick_count: 0, is_free: true) }
 
   it "successfully subscribes" do
@@ -39,9 +39,9 @@ RSpec.describe GameChannel, type: :channel do
         character_id: character.id,
         message: "Game created successfully. You are Character #{character.id} ('Creator')."
       )
-      expect(subscription).to have_stream_from("game_#{game.id}")
+      expect(subscription).to have_stream_from("game_#{game.id}_character_#{character.id}")
 
-      expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}", anything)
+      expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}_character_#{character.id}", anything)
     end
   end
 
@@ -78,8 +78,10 @@ RSpec.describe GameChannel, type: :channel do
           character_id: new_character.id,
           message: "Successfully joined Game #{game.id} as Character #{new_character.id} ('Joiner')."
         )
-        expect(subscription).to have_stream_from("game_#{game.id}")
-        expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}", anything)
+        expect(subscription).to have_stream_from("game_#{game.id}_character_#{new_character.id}")
+
+        expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}_character_#{new_character.id}", anything)
+        expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}_character_#{existing_character.id}", anything)
       end
     end
 
@@ -144,8 +146,8 @@ RSpec.describe GameChannel, type: :channel do
         character_id: character.id,
         message: "Successfully rejoined Game #{game.id} as Character #{character.id} ('Player 1')."
       )
-      expect(subscription).to have_stream_from("game_#{game.id}")
-      expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}", anything)
+      expect(subscription).to have_stream_from("game_#{game.id}_character_#{character.id}")
+      expect(ActionCable.server).to have_received(:broadcast).with("game_#{game.id}_character_#{character.id}", anything)
     end
 
     it "transmits error for invalid game_id" do
@@ -166,11 +168,15 @@ RSpec.describe GameChannel, type: :channel do
   describe "#declare_action" do
     let!(:game) { Game.create! }
     let!(:character) { game.characters.create!(name: "Player 1") }
+    let!(:other_character) { game.characters.create!(name: "Player 2") }
+
 
     before do
       game.setup_new_game!
       game.update!(current_character_id: character.id)
       character.reload
+      other_character.reload
+
 
       @card_to_play = character.hand.cards.joins(:template).find_by(templates: { id: template1.id })
       unless @card_to_play
@@ -184,12 +190,12 @@ RSpec.describe GameChannel, type: :channel do
       expect(@card_to_play).not_to be_nil
       character.update!(actions_remaining: 1)
 
-      subscribe
+      subscribe(character_id: character.id)
       perform(:rejoin_game, game_id: game.id, player_secret: character.id)
       allow(ActionCable.server).to receive(:broadcast)
     end
 
-    it "successfully declares an action, changes action count, and broadcasts the event" do
+    it "successfully declares an action, changes action count, and broadcasts the event to all character streams" do
       subscription.connection.instance_variable_set(:@transmissions, [])
       initial_action_count = Action.count
 
@@ -207,15 +213,17 @@ RSpec.describe GameChannel, type: :channel do
         expect(action_record_in_db).not_to be_nil
 
         source_character_name = character.name
-        expect(ActionCable.server).to have_received(:broadcast).with(
-          "game_#{game.id}",
-          hash_including(
-            type: "game_state",
-            game_state: hash_including(
-              last_event: "Action #{action_record_in_db.id} declared by #{source_character_name}."
+        game.characters.each do |char_in_game|
+            expect(ActionCable.server).to have_received(:broadcast).with(
+              "game_#{game.id}_character_#{char_in_game.id}",
+              hash_including(
+                type: "game_state",
+                game_state: hash_including(
+                  last_event: "Action #{action_record_in_db.id} declared by #{source_character_name}."
+                )
+              )
             )
-          )
-        )
+        end
         expect(transmissions).to be_empty
       end
     end
@@ -291,20 +299,113 @@ RSpec.describe GameChannel, type: :channel do
     end
   end
 
+  describe "game state payload" do
+    let!(:game) { Game.create! }
+    let!(:char1) { game.characters.create!(name: "Alice") }
+    let!(:char2) { game.characters.create!(name: "Bob") }
+    
+    before do
+      template1
+      template2
+
+      Card.where(owner_character_id: [char1.id, char2.id]).destroy_all
+
+      @alice_card1_obj = char1.cards.create!(template: template1, location: 'hand', position: 0)
+      @alice_card2_obj = char1.cards.create!(template: template2, location: 'hand', position: 1)
+      
+      @bob_card1_obj = char2.cards.create!(template: template1, location: 'hand', position: 0)
+
+      game.update!(current_character_id: char1.id)
+      char1.reload
+      char2.reload
+      
+      allow(ActionCable.server).to receive(:broadcast)
+    end
+
+    context "when Alice (char1) triggers a broadcast via rejoining" do
+      it "broadcasts Alice's view to Alice's stream and Bob's view to Bob's stream" do
+        subscribe(character_id: char1.id)
+        perform(:rejoin_game, game_id: game.id, player_secret: char1.id)
+
+        ordered_characters = game.characters.order(:id)
+        char1_ordered_idx = ordered_characters.index(char1)
+        char2_ordered_idx = ordered_characters.index(char2)
+
+        alice_view_characters_matcher = Array.new(ordered_characters.size)
+        alice_view_characters_matcher[char1_ordered_idx] = hash_including(
+          id: char1.id,
+          hand_card_count: 2,
+          hand_cards: match_array([
+            hash_including(id: @alice_card1_obj.id, name: template1.name, description: template1.description),
+            hash_including(id: @alice_card2_obj.id, name: template2.name, description: template2.description)
+          ])
+        )
+        alice_view_characters_matcher[char2_ordered_idx] = hash_including(
+          id: char2.id,
+          hand_card_count: 1,
+          hand_cards: nil 
+        )
+        
+        bob_view_characters_matcher = Array.new(ordered_characters.size)
+        bob_view_characters_matcher[char1_ordered_idx] = hash_including(
+          id: char1.id,
+          hand_card_count: 2,
+          hand_cards: nil
+        )
+        bob_view_characters_matcher[char2_ordered_idx] = hash_including(
+          id: char2.id,
+          hand_card_count: 1,
+          hand_cards: match_array([
+            hash_including(id: @bob_card1_obj.id, name: template1.name, description: template1.description)
+          ])
+        )
+
+        expect(ActionCable.server).to have_received(:broadcast).with(
+          "game_#{game.id}_character_#{char1.id}",
+          hash_including(
+            type: "game_state",
+            game_state: hash_including(
+              characters: alice_view_characters_matcher,
+              current_character_id: char1.id
+            )
+          )
+        )
+
+        expect(ActionCable.server).to have_received(:broadcast).with(
+          "game_#{game.id}_character_#{char2.id}",
+          hash_including(
+            type: "game_state",
+            game_state: hash_including(
+              characters: bob_view_characters_matcher,
+              current_character_id: char1.id
+            )
+          )
+        )
+      end
+    end
+  end
+
   describe "#leave_game" do
     let!(:game) { Game.create! }
     let!(:character) { game.characters.create!(name: "Player 1") }
+    let!(:other_char) { game.characters.create!(name: "Player 2") }
+
 
     before do
       game.setup_new_game!
-      subscribe
+      game.update!(current_character_id: character.id)
+      character.reload
+      other_char.reload
+
+      subscribe(character_id: character.id)
       perform(:rejoin_game, game_id: game.id, player_secret: character.id)
       allow(ActionCable.server).to receive(:broadcast)
     end
 
-    it "allows a player to leave, transmits and broadcasts" do
+    it "allows a player to leave, transmits and broadcasts the event to remaining players' streams" do
       subscription.connection.instance_variable_set(:@transmissions, [])
       perform(:leave_game, {})
+
       transmitted_data = transmissions.last
       expect(transmitted_data).to include(
         type: "left_game",
@@ -313,8 +414,9 @@ RSpec.describe GameChannel, type: :channel do
       )
       expect(subscription.instance_variable_get(:@current_game_id)).to be_nil
       expect(subscription.instance_variable_set(:@current_character_id, nil))
+
       expect(ActionCable.server).to have_received(:broadcast).with(
-        "game_#{game.id}",
+        "game_#{game.id}_character_#{other_char.id}",
         hash_including(
           type: "game_state",
           game_state: hash_including(last_event: "Player #{character.name} has left the game.")
