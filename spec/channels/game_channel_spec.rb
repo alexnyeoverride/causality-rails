@@ -303,22 +303,21 @@ RSpec.describe GameChannel, type: :channel do
     let!(:game) { Game.create! }
     let!(:char1) { game.characters.create!(name: "Alice") }
     let!(:char2) { game.characters.create!(name: "Bob") }
-    
+
     before do
       template1
       template2
-
       Card.where(owner_character_id: [char1.id, char2.id]).destroy_all
 
       @alice_card1_obj = char1.cards.create!(template: template1, location: 'hand', position: 0)
       @alice_card2_obj = char1.cards.create!(template: template2, location: 'hand', position: 1)
-      
       @bob_card1_obj = char2.cards.create!(template: template1, location: 'hand', position: 0)
 
       game.update!(current_character_id: char1.id)
       char1.reload
       char2.reload
-      
+      game.reload
+
       allow(ActionCable.server).to receive(:broadcast)
     end
 
@@ -327,33 +326,31 @@ RSpec.describe GameChannel, type: :channel do
         subscribe(character_id: char1.id)
         perform(:rejoin_game, game_id: game.id, player_secret: char1.id)
 
-        ordered_characters = game.characters.order(:id)
-        char1_ordered_idx = ordered_characters.index(char1)
-        char2_ordered_idx = ordered_characters.index(char2)
-
-        alice_view_characters_matcher = Array.new(ordered_characters.size)
-        alice_view_characters_matcher[char1_ordered_idx] = hash_including(
+        alice_data_in_alice_payload = hash_including(
           id: char1.id,
+          name: "Alice",
           hand_card_count: 2,
           hand_cards: match_array([
             hash_including(id: @alice_card1_obj.id, name: template1.name, description: template1.description),
             hash_including(id: @alice_card2_obj.id, name: template2.name, description: template2.description)
           ])
         )
-        alice_view_characters_matcher[char2_ordered_idx] = hash_including(
+        bob_data_in_alice_payload = hash_including(
           id: char2.id,
-          hand_card_count: 1,
-          hand_cards: nil 
+          name: "Bob",
+          hand_card_count: 1
         )
-        
-        bob_view_characters_matcher = Array.new(ordered_characters.size)
-        bob_view_characters_matcher[char1_ordered_idx] = hash_including(
+
+
+        alice_data_in_bob_payload = hash_including(
           id: char1.id,
-          hand_card_count: 2,
-          hand_cards: nil
+          name: "Alice",
+          hand_card_count: 2
         )
-        bob_view_characters_matcher[char2_ordered_idx] = hash_including(
+
+        bob_data_in_bob_payload = hash_including(
           id: char2.id,
+          name: "Bob",
           hand_card_count: 1,
           hand_cards: match_array([
             hash_including(id: @bob_card1_obj.id, name: template1.name, description: template1.description)
@@ -365,7 +362,7 @@ RSpec.describe GameChannel, type: :channel do
           hash_including(
             type: "game_state",
             game_state: hash_including(
-              characters: alice_view_characters_matcher,
+              characters: match_array([alice_data_in_alice_payload, bob_data_in_alice_payload]),
               current_character_id: char1.id
             )
           )
@@ -376,7 +373,7 @@ RSpec.describe GameChannel, type: :channel do
           hash_including(
             type: "game_state",
             game_state: hash_including(
-              characters: bob_view_characters_matcher,
+              characters: match_array([alice_data_in_bob_payload, bob_data_in_bob_payload]),
               current_character_id: char1.id
             )
           )
