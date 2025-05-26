@@ -30,8 +30,10 @@ class Game < ApplicationRecord
             deck_cards_to_create << { owner_character_id: character.id, template_id: template.id, location: 'deck' }
           end
         end
+        # TODO: this violates the uniqueness constraint on card (character,location,position)
         Card.insert_all(deck_cards_to_create)
 
+        # TODO: this is n+1
         Card.where(owner_character_id: character.id, location: 'deck').find_each do |card|
           template = all_templates.find { |t| t.id == card.template_id}
           next unless template

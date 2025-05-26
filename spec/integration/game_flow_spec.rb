@@ -61,7 +61,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         expect(declared_action.errors).to be_empty
         expect(declared_action.source).to eq(char1)
         expect(declared_action.card).to eq(char1_attack_card)
-        expect(declared_action.target_characters).to include(char2)
+        expect(declared_action.character_targets).to include(char2)
         expect(char1_attack_card.reload.location).to eq('table')
       end
 
@@ -149,6 +149,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       end
 
       it 'advances trigger phase to "reacted_to" if all other living characters react or pass' do
+        game.declare_action(source_character_id: char1.id, card_id: char1_pass_card.id, trigger_action_id: trigger_action.id)
         game.declare_action(source_character_id: char2.id, card_id: char2_reaction_card.id, trigger_action_id: trigger_action.id)
         expect(trigger_action.reload.phase).to eq('declared') 
         game.declare_action(source_character_id: char3.id, card_id: char3_pass_card.id, trigger_action_id: trigger_action.id)

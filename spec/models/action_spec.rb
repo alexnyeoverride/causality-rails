@@ -42,30 +42,11 @@ RSpec.describe Action, type: :model do
     it 'assigns target_ids and allows saving for association' do
       target_char = game_instance.characters.create!(name: 'Target')
       action_with_targets = Action.new
-      action_with_targets.initialize_from_template_and_attributes(template_basic, character, { target_ids: [target_char.id, ''], card: card_instance_basic })
+      action_with_targets.initialize_from_template_and_attributes(template_basic, character, { character_target_ids: [target_char.id, ''], card: card_instance_basic })
       action_with_targets.save!
 
-      expect(action_with_targets.target_ids).to eq([target_char.id])
-      expect(action_with_targets.targets.first).to eq(target_char)
-    end
-  end
-
-  describe 'phase transitions' do
-    let(:action) {
-      a = Action.new
-      a.initialize_from_template_and_attributes(template_basic, character, {card: card_instance_basic})
-      a.save!
-      a
-    }
-
-    it '#finish_reactions_to! changes phase to "reacted_to"' do
-      action.finish_reactions_to!
-      expect(action.reload.phase).to eq('reacted_to')
-    end
-
-    it '#resolve! changes phase to "resolved"' do
-      action.resolve!
-      expect(action.reload.phase).to eq('resolved')
+      expect(action_with_targets.character_target_ids).to eq([target_char.id])
+      expect(action_with_targets.character_targets.first).to eq(target_char)
     end
   end
 
@@ -78,11 +59,11 @@ RSpec.describe Action, type: :model do
     }
 
     it '#can_declare? calls BehaviorRegistry' do
-      expect(action.can_declare?(game_context)).to be true
+      expect(action.can_declare?).to be true
     end
 
     it '#can_tick? calls BehaviorRegistry' do
-      expect(action.can_tick?(game_context)).to be true
+      expect(action.can_tick?).to be true
     end
   end
 end

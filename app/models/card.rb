@@ -20,6 +20,9 @@ class Card < ApplicationRecord
   private
 
   def copy_targeting_parameters_from_template
-    # TODO
+    self.target_type_enum ||= template.target_type_enum
+    self.target_count_min ||= template.target_count_min
+    self.target_count_max ||= template.target_count_max
+    self.target_condition_key ||= template.target_condition_key
   end
 end

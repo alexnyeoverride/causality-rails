@@ -80,7 +80,7 @@ RSpec.describe Causality, type: :integration do
       expect(returned_action.errors).to be_empty
       expect(returned_action.source).to eq(char1)
       expect(returned_action.card).to eq(card_attack_c1)
-      expect(returned_action.targets.map(&:id)).to eq([char2.id])
+      expect(returned_action.character_targets.map(&:id)).to eq([char2.id])
     end
 
     it 'returns an unpersisted action with errors if save fails' do
@@ -158,7 +158,7 @@ RSpec.describe Causality, type: :integration do
         reaction_after.save!
 
         expect(causality.get_next_tickable).to eq(main_action)
-        main_action.resolve!
+        main_action.update!(phase: :resolved)
         expect(causality.get_next_tickable).to eq(reaction_after)
       end
     end

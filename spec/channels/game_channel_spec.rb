@@ -48,10 +48,10 @@ RSpec.describe GameChannel, type: :channel do
   describe "#join_game" do
     let!(:game) { Game.create! }
     let!(:existing_character) do
-        char = game.characters.create!(name: "Player 1")
-        game.setup_new_game!
-        game.reload
-        char
+      char = game.characters.create!(name: "Player 1")
+      game.setup_new_game!
+      game.reload
+      char
     end
 
     before do
@@ -377,8 +377,18 @@ RSpec.describe GameChannel, type: :channel do
           is_current_player: true,
           is_alive: true,
           hand_cards: match_array([
-            {id: alice_card1_obj.id, name: template1.name, description: template1.description},
-            {id: alice_card2_obj.id, name: template2.name, description: template2.description}
+            {
+              id: alice_card1_obj.id, name: template1.name, description: template1.description,
+              resolution_timing: template1.resolution_timing, is_free: template1.is_free,
+              target_type_enum: template1.target_type_enum, target_count_min: template1.target_count_min,
+              target_count_max: template1.target_count_max, target_condition_key: template1.target_condition_key
+            },
+            {
+              id: alice_card2_obj.id, name: template2.name, description: template2.description,
+              resolution_timing: template2.resolution_timing, is_free: template2.is_free,
+              target_type_enum: template2.target_type_enum, target_count_min: template2.target_count_min,
+              target_count_max: template2.target_count_max, target_condition_key: template2.target_condition_key
+            }
           ])
         }
 
@@ -396,16 +406,16 @@ RSpec.describe GameChannel, type: :channel do
         }
 
         expected_carol_payload_for_alice = {
-            id: char3.id,
-            name: "Carol",
-            health: 100,
-            actions_remaining: Character::DEFAULT_ACTIONS,
-            reactions_remaining: Character::DEFAULT_REACTIONS,
-            hand_card_count: 0,
-            deck_card_count: 1,
-            discard_pile_card_count: 1,
-            is_current_player: false,
-            is_alive: true
+          id: char3.id,
+          name: "Carol",
+          health: 100,
+          actions_remaining: Character::DEFAULT_ACTIONS,
+          reactions_remaining: Character::DEFAULT_REACTIONS,
+          hand_card_count: 0,
+          deck_card_count: 1,
+          discard_pile_card_count: 1,
+          is_current_player: false,
+          is_alive: true
         }
 
         expected_active_actions_payload = [

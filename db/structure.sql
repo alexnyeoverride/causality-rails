@@ -177,7 +177,7 @@ CREATE TABLE public.cards (
     owner_character_id bigint NOT NULL,
     template_id bigint NOT NULL,
     location public.location_enum DEFAULT 'deck'::public.location_enum NOT NULL,
-    "position" integer DEFAULT 0 NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL, -- TODO: add a uniqueness index on (owner_character_id, location, position)
     created_at timestamp(6) without time zone DEFAULT now() NOT NULL,
     updated_at timestamp(6) without time zone DEFAULT now() NOT NULL,
     target_type_enum public.target_type_enum,

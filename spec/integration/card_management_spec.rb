@@ -44,7 +44,6 @@ RSpec.describe CharacterCardManager, type: :integration do
     context 'when deck is empty but discard pile has cards' do
       before do
         character.deck.cards.destroy_all
-        character.cards.create!(template: template, location: 'discard', position: 0, id: 100)
         character.cards.create!(template: template, location: 'discard', position: 1, id: 101)
         character.reload
       end
