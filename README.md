@@ -21,6 +21,3 @@ Declared actions enter a processing queue managed by the `Causality` service.
 
 ### 4. Characters & Resources
 Characters have health, action points, and reaction points. They manage their cards through a `CharacterCardManager` which handles drawing from a deck, moving cards to hand, and discarding. The default health is 100, with 2 actions and 2 reactions per turn typically.
-
-### 5. Cards
-Cards are instances derived from **Templates**. Each character has their own deck, hand, and discard pile. Playing a card moves it from the hand to the "table" (representing an active action) and eventually to the discard pile.
