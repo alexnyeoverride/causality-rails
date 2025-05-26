@@ -124,9 +124,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
     context 'when declaring a reaction' do
       let!(:trigger_action) do
         allow(game).to receive(:process_actions!) 
-        action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
-        action.update!(phase: 'declared') if action.persisted? && action.phase != 'declared'
-        action
+        game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
       end
       before do
         allow(game).to receive(:process_actions!).and_call_original 
@@ -148,13 +146,15 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         expect(char2_reaction_card.reload.location).to eq('table')
       end
 
-      it 'advances trigger phase to "reacted_to" if all other living characters react or pass' do
+      it 'advances trigger phase to "reacted_to" if all living characters react or pass' do
         game.declare_action(source_character_id: char1.id, card_id: char1_pass_card.id, trigger_action_id: trigger_action.id)
         game.declare_action(source_character_id: char2.id, card_id: char2_reaction_card.id, trigger_action_id: trigger_action.id)
         expect(trigger_action.reload.phase).to eq('declared') 
         game.declare_action(source_character_id: char3.id, card_id: char3_pass_card.id, trigger_action_id: trigger_action.id)
         expect(trigger_action.reload.phase).to eq('reacted_to')
       end
+
+      # TODO: test that it advances to "reacted_to" if a subset of characters all react, but the only characters not to react are dead.
     end
   end
 

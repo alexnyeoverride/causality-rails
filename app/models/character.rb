@@ -14,7 +14,7 @@ class Character < ApplicationRecord
 
   scope :alive, -> { where('health > 0') }
 
-  delegate :draw_cards_from_deck!, :discard_cards_from_hand!, :reshuffle_discard_into_deck!, :shuffle_deck!,
+  delegate :draw_cards_from_deck!, :discard_cards_from_hand!, :reshuffle_discard_into_deck!,
            to: :card_manager
   delegate :deck, :hand, :discard_pile, to: :card_manager
 
@@ -55,12 +55,8 @@ class Character < ApplicationRecord
     end
   end
 
-  def find_card_in_hand(card_id)
-    self.hand.find_card(card_id)
-  end
-
   def reset_turn_resources!
-    update!(actions_remaining: DEFAULT_ACTIONS, reactions_remaining: DEFAULT_REACTIONS)
+    update!(actions_remaining: nil, reactions_remaining: nil)
   end
 
   def alive?

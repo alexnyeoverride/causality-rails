@@ -177,7 +177,7 @@ CREATE TABLE public.cards (
     owner_character_id bigint NOT NULL,
     template_id bigint NOT NULL,
     location public.location_enum DEFAULT 'deck'::public.location_enum NOT NULL,
-    "position" integer DEFAULT 0 NOT NULL, -- TODO: add a uniqueness index on (owner_character_id, location, position)
+    "position" integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) without time zone DEFAULT now() NOT NULL,
     updated_at timestamp(6) without time zone DEFAULT now() NOT NULL,
     target_type_enum public.target_type_enum,
@@ -383,6 +383,13 @@ ALTER TABLE ONLY public.templates
 
 
 --
+-- Name: index_action_card_targets_on_action_and_card; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_action_card_targets_on_action_and_card ON public.action_card_targets USING btree (action_id, target_card_id);
+
+
+--
 -- Name: index_action_card_targets_on_action_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -457,6 +464,13 @@ CREATE INDEX index_actions_on_trigger_id ON public.actions USING btree (trigger_
 --
 
 CREATE INDEX index_cards_on_owner_character_id ON public.cards USING btree (owner_character_id);
+
+
+--
+-- Name: index_cards_on_owner_loc_pos_uniqueness; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_cards_on_owner_loc_pos_uniqueness ON public.cards USING btree (owner_character_id, location, "position");
 
 
 --
@@ -583,6 +597,7 @@ ALTER TABLE ONLY public.action_card_targets
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20250526191050'),
 ('20250526161111'),
 ('20250526150956'),
 ('20250524225229');

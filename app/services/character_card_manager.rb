@@ -29,18 +29,11 @@ class CharacterCardManager
     hand.add!(cards_drawn)
   end
 
-  # TODO: moving cards from play to discard
-  # TODO: moving cards from hand to play could also be managed by this class.
-
   def reshuffle_discard_into_deck!
     cards_from_discard = discard_pile.retrieve_all_for_reshuffle!
     return if cards_from_discard.empty?
 
     deck.add!(cards_from_discard)
-    deck.shuffle!
-  end
-
-  def shuffle_deck!
     deck.shuffle!
   end
 end

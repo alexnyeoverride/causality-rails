@@ -38,6 +38,8 @@ class Deck
       [card_id, new_positions_list[index]]
     end.to_h
 
+    # TODO: even though the bulk update logic is correct in setting the new positions, this fails the database uniqueness constraint,
+    # because the database checks the constraint after each row updated, not after all rows are updated.
     Card.transaction do
       bulk_update_cards(
         card_ids_to_update: card_to_new_position_map.keys,

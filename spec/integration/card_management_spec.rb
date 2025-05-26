@@ -129,7 +129,7 @@ RSpec.describe CharacterCardManager, type: :integration do
         end
       end
 
-      manager.shuffle_deck!
+      manager.deck.shuffle!
 
       new_positions_map = character.cards.where(id: initial_deck_card_ids).order(:id).pluck(:id, :position).to_h
 

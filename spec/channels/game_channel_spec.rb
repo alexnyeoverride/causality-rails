@@ -469,20 +469,14 @@ RSpec.describe GameChannel, type: :channel do
           is_alive: true
         }
 
+        expected_bob_hand_cards = [
+          { id: bob_card1_obj.id, name: template1.name, description: template1.description, resolution_timing: template1.resolution_timing.to_s, is_free: template1.is_free, target_type_enum: template1.target_type_enum.to_s, target_count_min: template1.target_count_min, target_count_max: template1.target_count_max, target_condition_key: template1.target_condition_key }
+        ]
         expected_bob_payload_for_bob = {
-          id: char2.id,
-          name: "Bob",
-          health: 0,
-          actions_remaining: Character::DEFAULT_ACTIONS,
-          reactions_remaining: Character::DEFAULT_REACTIONS,
-          hand_card_count: 1,
-          deck_card_count: 0,
-          discard_pile_card_count: 0,
-          is_current_player: false,
-          is_alive: false,
-          hand_cards: match_array([
-             {id: bob_card1_obj.id, name: template1.name, description: template1.description}
-          ])
+          id: char2.id, name: "Bob", health: 0, actions_remaining: Character::DEFAULT_ACTIONS, reactions_remaining: Character::DEFAULT_REACTIONS,
+          hand_card_count: 1, deck_card_count: 0, discard_pile_card_count: 0,
+          is_current_player: false, is_alive: false,
+          hand_cards: match_array(expected_bob_hand_cards)
         }
         expected_carol_payload_for_bob = {
             id: char3.id,

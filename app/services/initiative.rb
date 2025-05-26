@@ -34,7 +34,11 @@ class Initiative
       end
     end
 
+    # TODO: Wrong. Initiative should advance even during reaction phase.  Add a test.  (reaction initiative doesn't have to be a separate integer tracked and persisted on Game, because we loop back to where we started from when reaction phase ends)
+    # TODO: A more advanced test that initiative returns to the expected character when not just one layer of reactions, but multiple layers have completed.
+    # TODO: Wrong. Turn resources should not be reset every time initiative advances.  Add a test.
     if !is_reaction_phase
+      # TODO: n+1
       game.characters.alive.each do |character|
         character.reset_turn_resources!
       end
@@ -46,12 +50,10 @@ class Initiative
       if first_eligible_after_reset
         game.update!(current_character: first_eligible_after_reset)
         return first_eligible_after_reset
-      else
-        return nil
       end
     end
-    return nil
   end
+
   private
 
   def can_take_action?(character, is_reaction_phase)

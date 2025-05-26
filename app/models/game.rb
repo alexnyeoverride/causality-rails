@@ -16,6 +16,8 @@ class Game < ApplicationRecord
     @causality ||= Causality.new(self)
   end
 
+  # TODO: ensure this is called only after all characters have joined / been created.
+  # Otherwise only the creator will have a shuffled deck.  Or cards at all for that matter.
   def setup_new_game!
     return unless characters.any?
 
@@ -23,35 +25,42 @@ class Game < ApplicationRecord
       all_templates = Template.all.to_a
       return if all_templates.empty?
 
+      # Optimized to bulk create all cards for all characters in one query.
+      # This includes ensuring:
+      #  - characters have cards in hand and the remainder in their deck
+      #  - decks are shuffled
+      #  - each card has a unique position in its location
+      #  - positions start at 0 for each container
+      total_cards_for_character = CARDS_PER_TEMPLATE_IN_DECK * all_templates.count
+      cards_to_create = []
       characters.each do |character|
-        deck_cards_to_create = []
+        shuffle = (0...total_cards_for_character).to_a.shuffle
+        current_position = 0
         CARDS_PER_TEMPLATE_IN_DECK.times do
           all_templates.each do |template|
-            deck_cards_to_create << { owner_character_id: character.id, template_id: template.id, location: 'deck' }
+            shuffled_position = shuffle[current_position]
+            location = shuffled_position < STARTING_HAND_SIZE ? :hand : :deck
+            # Reset counting so positions start at 0 in the deck too.
+            position = location == :deck ? shuffled_position - STARTING_HAND_SIZE : shuffled_position
+            cards_to_create << {
+              owner_character_id: character.id,
+              template_id: template.id,
+              location: location,
+              position: position,
+              target_type_enum: template.target_type_enum,
+              target_count_min: template.target_count_min,
+              target_count_max: template.target_count_max,
+              target_condition_key: template.target_condition_key,
+              created_at: Time.current,
+              updated_at: Time.current
+            }
+            current_position += 1
           end
         end
-        # TODO: this violates the uniqueness constraint on card (character,location,position)
-        Card.insert_all(deck_cards_to_create)
-
-        # TODO: this is n+1
-        Card.where(owner_character_id: character.id, location: 'deck').find_each do |card|
-          template = all_templates.find { |t| t.id == card.template_id}
-          next unless template
-          card.target_type_enum = template.target_type_enum
-          card.target_count_min = template.target_count_min
-          card.target_count_max = template.target_count_max
-          card.target_condition_key = template.target_condition_key
-          card.save!
-        end
-
-        character.shuffle_deck!
-        character.draw_cards_from_deck!(STARTING_HAND_SIZE)
-        character.reset_turn_resources!
       end
+      Card.insert_all(cards_to_create)
 
-      if characters.any? && self.current_character_id.nil?
-        self.update!(current_character_id: characters.order(:id).first.id)
-      end
+      self.update!(current_character_id: characters.order(:id).first.id)
     end
   end
 
@@ -82,12 +91,13 @@ class Game < ApplicationRecord
       }
     )
 
+    # TODO: do these belong as validations on `Action` itself?
     unless source_character.alive?
       action_to_process.errors.add(:base, "Source character is not alive.")
       return action_to_process
     end
 
-    unless source_character.find_card_in_hand(card_record.id)
+    unless card_record.location == :hand
       action_to_process.errors.add(:base, "Card not in player's hand.")
       return action_to_process
     end
@@ -142,59 +152,35 @@ class Game < ApplicationRecord
       tickable_action.on_tick!
 
       if tickable_action.max_tick_count.present? && tickable_action.max_tick_count > 0
-        tickable_action.decrement!(:max_tick_count) if tickable_action.persisted?
+        tickable_action.decrement!(:max_tick_count)
       end
 
-      tickable_action.reload
-
       can_tick_again = tickable_action.can_tick?
-      should_resolve_due_to_completion = !can_tick_again || \
+      should_resolve_due_to_completion = !can_tick_again ||
         (tickable_action.max_tick_count.present? && tickable_action.max_tick_count <= 0)
 
-      if tickable_action.card.name == 'Pass' && !can_tick_again && tickable_action.phase.to_s == 'declared'
+      if tickable_action.card.name == 'Pass'
         should_resolve_due_to_completion = true
       end
 
-      if should_resolve_due_to_completion && !['resolved', 'failed'].include?(tickable_action.phase.to_s)
-        tickable_action.update!(phase: 'resolved')
-        if tickable_action.card.location.to_s == 'table'
-            tickable_action.source.discard_pile.add!([tickable_action.card])
-        end
-      end
+      if should_resolve_due_to_completion && tickable_action.phase != 'failed'
+        tickable_action.update(phase: :resolved)
 
-      tickable_action.reload
+        # TODO: create reusable repositioning logic for arbitary container-to-container transfers, and put that in the bulk operations concern.
+        # `transfer(from: :table, to: :discard, for: action.source)` 
+        max_discard_pos = action.source.cards.where(location: 'discard').maximum(:position) || -1
+        new_position_in_discard = max_discard_pos + 1
+        tickable_action.card.update(
+          location: :discard,
+          position: new_position_in_discard
+        )
+      end
 
       if tickable_action.phase.to_s == 'failed'
-        unresolved_reactions_exist = tickable_action.reactions.any? do |r|
-          !['resolved', 'failed'].include?(r.phase.to_s)
-        end
-
-        if unresolved_reactions_exist
-          failed_action_data = causality.fail_recursively!(tickable_action.id)
-
-          if failed_action_data.any?
-            cards_to_discard_by_owner_id = failed_action_data.group_by { |data| data["source_id"] }.transform_values do |data_array|
-              data_array.map { |data| data["card_id"] }.uniq
-            end
-
-            owner_ids = cards_to_discard_by_owner_id.keys
-            owners_map = Character.where(id: owner_ids).index_by(&:id)
-
-            owners_map.each do |owner_id, owner|
-              card_ids_for_this_owner = cards_to_discard_by_owner_id[owner_id]
-              next if card_ids_for_this_owner.blank?
-
-              cards_on_table_to_discard = Card.where(id: card_ids_for_this_owner, location: 'table', owner_character_id: owner_id)
-
-              if cards_on_table_to_discard.any?
-                owner.discard_pile.add!(cards_on_table_to_discard.to_a)
-              end
-            end
-          end
-        elsif tickable_action.card.location.to_s == 'table'
-          tickable_action.source.discard_pile.add!([tickable_action.card])
-        end
+        failed_action_data = causality.fail_recursively!(tickable_action.id)
+        # TODO: notify client of card ids to animate as discarded
       end
+      # TODO: notify client of cards which were resolved and which were failed.  Also notify of any which ticked but did not finish.
     end
   end
 

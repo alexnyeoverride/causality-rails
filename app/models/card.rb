@@ -6,6 +6,7 @@ class Card < ApplicationRecord
   validates :position, presence: true, numericality: { greater_than_or_equal_to: 0 }
   validates :owner_character_id, uniqueness: { scope: [:owner_character_id, :location, :position], message: "already has a card in that location and position" }
 
+  # TODO: currently cards are not created individually.  But if a game mechanic ever allows conjuring a card into hand or something, then this will be useful.
   before_create :copy_targeting_parameters_from_template
 
   delegate :name, :description, :resolution_timing, :is_free,

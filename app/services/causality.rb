@@ -120,7 +120,8 @@ class Causality
       "Fail Actions Recursively and Return Card/Source Info",
       bindings
     )
-    result.to_a
+
+    Card.where(id: result.map {|r| r['card_id']}).update_all(location: :discard)
   end
 
   private
