@@ -59,8 +59,6 @@ class Causality
 
     return nil if all_structurally_plausible_actions.empty?
 
-    game_context = { game: @game }
-
     find_actual_first_to_resolve = lambda do |current_action_candidate, all_actions_context_for_recursion|
       potential_preempting_reactions = all_actions_context_for_recursion.select do |potential_reaction|
         potential_reaction.trigger_id == current_action_candidate.id &&
@@ -69,7 +67,7 @@ class Causality
       end.sort_by(&:id)
 
       potential_preempting_reactions.each do |reaction|
-        if reaction.can_tick?(game_context)
+        if reaction.can_tick?
           return find_actual_first_to_resolve.call(reaction, all_actions_context_for_recursion)
         end
       end
@@ -77,7 +75,7 @@ class Causality
     end
 
     all_structurally_plausible_actions.each do |potential_initial_action|
-      if potential_initial_action.can_tick?(game_context)
+      if potential_initial_action.can_tick?
         return find_actual_first_to_resolve.call(potential_initial_action, all_structurally_plausible_actions)
       end
     end
@@ -95,19 +93,19 @@ class Causality
 
   def fail_recursively!(root_action_id)
     sql = <<-SQL
-      WITH RECURSIVE failed_chain AS (
+      WITH RECURSIVE failure_chain AS (
         SELECT id, card_id, source_id, game_id
         FROM actions
         WHERE id = $1 AND game_id = $2
         UNION ALL
         SELECT r.id, r.card_id, r.source_id, r.game_id
         FROM actions r
-        INNER JOIN failed_chain fc ON r.trigger_id = fc.id AND r.game_id = fc.game_id
+        INNER JOIN failure_chain fc ON r.trigger_id = fc.id AND r.game_id = fc.game_id
         WHERE r.phase NOT IN ('resolved', 'failed') AND r.id != fc.id
       )
       UPDATE actions
       SET phase = 'failed', updated_at = $3
-      WHERE id IN (SELECT id FROM failed_chain) AND game_id = $2
+      WHERE id IN (SELECT id FROM failure_chain) AND game_id = $2
       RETURNING id, card_id, source_id;
     SQL
 
@@ -131,8 +129,7 @@ class Causality
     trigger_action = game.actions.find_by(id: trigger_action_id)
     return unless trigger_action && trigger_action.phase.to_s == 'declared'
 
-    active_characters_who_could_potentially_react = game.characters.alive.to_a
-    potential_reactors = active_characters_who_could_potentially_react.reject { |char| char.id == trigger_action.source_id }
+    potential_reactors = game.characters.alive.to_a
 
     responses_to_trigger = game.actions.where(trigger_id: trigger_action_id)
     responding_character_ids = responses_to_trigger.pluck(:source_id).uniq
@@ -142,7 +139,7 @@ class Causality
     end
 
     if potential_reactors.empty? || all_potential_reactors_responded
-      trigger_action.finish_reactions_to!
+      trigger_action.update_column(:phase, :reacted_to)
     end
   end
 end

@@ -12,7 +12,7 @@ RSpec.describe Card, type: :model do
       tick_condition_key: 'default_tick_condition',
       tick_effect_key: 'default_tick_effect',
       max_tick_count: 1,
-      target_type_enum: 'character',
+      target_type_enum: 'enemy',
       target_count_min: 1,
       target_count_max: 2,
       target_condition_key: 'is_alive_condition'
@@ -27,10 +27,10 @@ RSpec.describe Card, type: :model do
       tick_condition_key: 'default_tick_condition',
       tick_effect_key: 'default_tick_effect',
       max_tick_count: 1,
-      target_type_enum: 'none',
+      target_type_enum: 'enemy',
       target_count_min: 0,
       target_count_max: 0,
-      target_condition_key: nil
+      target_condition_key: 'none'
     )
   }
 
@@ -39,7 +39,7 @@ RSpec.describe Card, type: :model do
       card = Card.new(owner: character, template: template_with_targeting)
       card.valid?
 
-      expect(card.target_type_enum).to eq('character')
+      expect(card.target_type_enum).to eq('enemy')
       expect(card.target_count_min).to eq(1)
       expect(card.target_count_max).to eq(2)
       expect(card.target_condition_key).to eq('is_alive_condition')
@@ -49,7 +49,7 @@ RSpec.describe Card, type: :model do
       card = Card.new(owner: character, template: template_no_targeting)
       card.valid?
 
-      expect(card.target_type_enum).to eq('none')
+      expect(card.target_type_enum).to eq('enemy')
       expect(card.target_count_min).to eq(0)
       expect(card.target_count_max).to eq(0)
       expect(card.target_condition_key).to be_nil
@@ -63,7 +63,7 @@ RSpec.describe Card, type: :model do
       )
       card.valid?
       expect(card.target_count_max).to eq(5)
-      expect(card.target_type_enum).to eq('character')
+      expect(card.target_type_enum).to eq('enemy')
     end
 
     it 'does not re-copy attributes if the record is not new' do
@@ -79,5 +79,8 @@ RSpec.describe Card, type: :model do
       expect(found_card.target_count_max).to eq(2)
     end
   end
+
+  # TODO: tests for validation: 'Owner character already has a card in that location and position'
+  # Test both:  it validates as an error if the constraint is violated.  It allows a card in the same location and position if the characters are different.
 end
 

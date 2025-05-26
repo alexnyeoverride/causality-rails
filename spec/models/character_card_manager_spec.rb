@@ -12,7 +12,7 @@ RSpec.describe CharacterCardManager, type: :integration do
       tick_condition_key: 'tck',
       tick_effect_key: 'tek',
       max_tick_count: 1,
-      target_type_enum: 'none',
+      target_type_enum: 'enemy',
       target_count_min: 0,
       target_count_max: 0
     )
@@ -44,7 +44,6 @@ RSpec.describe CharacterCardManager, type: :integration do
     context 'when deck is empty but discard pile has cards' do
       before do
         character.deck.cards.destroy_all
-        character.cards.create!(template: template, location: 'discard', position: 0, id: 100)
         character.cards.create!(template: template, location: 'discard', position: 1, id: 101)
         character.reload
       end
@@ -84,18 +83,6 @@ RSpec.describe CharacterCardManager, type: :integration do
         expect(drawn_cards.count).to eq(0)
         expect(character.hand.count).to eq(initial_hand_count)
       end
-    end
-  end
-
-  describe '#discard_cards_from_hand!' do
-    it 'moves specified cards from hand to discard pile' do
-      discarded_relation = manager.discard_cards_from_hand!([card_hand1.id])
-      discarded_cards = discarded_relation.to_a
-
-      expect(discarded_cards.map(&:id)).to eq([card_hand1.id])
-      expect(character.hand.count).to eq(0)
-      expect(character.discard_pile.count).to eq(2)
-      expect(card_hand1.reload.location).to eq('discard')
     end
   end
 

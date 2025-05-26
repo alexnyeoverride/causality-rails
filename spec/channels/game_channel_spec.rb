@@ -177,7 +177,6 @@ RSpec.describe GameChannel, type: :channel do
       character.reload
       other_character.reload
 
-
       @card_to_play = character.hand.cards.joins(:template).find_by(templates: { id: template1.id })
       unless @card_to_play
         @card_to_play = character.cards.create!(
@@ -326,23 +325,23 @@ RSpec.describe GameChannel, type: :channel do
         tick_condition_key: template2.tick_condition_key,
         tick_effect_key: template2.tick_effect_key
       )
-      action.action_targets.create!(target_character: char3)
+      action.action_character_targets.create!(target_character: char3)
       action
     end
 
     let!(:resolved_action) do
-        card_for_resolved_action = char1.cards.create!(template: template1, location: 'discard', position: 10)
-        game.actions.create!(
-            card: card_for_resolved_action,
-            source: char1,
-            phase: 'resolved',
-            resolution_timing: template1.resolution_timing,
-            is_free: template1.is_free,
-            max_tick_count: template1.max_tick_count,
-            declarability_key: template1.declarability_key,
-            tick_condition_key: template1.tick_condition_key,
-            tick_effect_key: template1.tick_effect_key
-        )
+      card_for_resolved_action = char1.cards.create!(template: template1, location: 'discard', position: 10)
+      game.actions.create!(
+        card: card_for_resolved_action,
+        source: char1,
+        phase: 'resolved',
+        resolution_timing: template1.resolution_timing,
+        is_free: template1.is_free,
+        max_tick_count: template1.max_tick_count,
+        declarability_key: template1.declarability_key,
+        tick_condition_key: template1.tick_condition_key,
+        tick_effect_key: template1.tick_effect_key
+      )
     end
 
 
@@ -534,7 +533,6 @@ RSpec.describe GameChannel, type: :channel do
     let!(:game) { Game.create! }
     let!(:character) { game.characters.create!(name: "Player 1") }
     let!(:other_char) { game.characters.create!(name: "Player 2") }
-
 
     before do
       game.setup_new_game!

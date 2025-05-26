@@ -64,7 +64,7 @@ RSpec.describe Causality, type: :integration do
       action.initialize_from_template_and_attributes(
         template_attack,
         char1,
-        { target_ids: [char2.id] }
+        { target_character_ids: [char2.id] }
       )
       action
     end

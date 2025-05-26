@@ -12,7 +12,7 @@ RSpec.describe CharacterCardManager, type: :integration do
       tick_condition_key: 'default_tick_condition_key',
       tick_effect_key: 'default_tick_effect_key',
       max_tick_count: 1,
-      target_type_enum: 'none',
+      target_type_enum: 'enemy',
       target_count_min: 0,
       target_count_max: 0
     )

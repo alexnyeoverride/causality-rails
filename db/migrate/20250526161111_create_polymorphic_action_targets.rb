@@ -6,8 +6,6 @@ class CreatePolymorphicActionTargets < ActiveRecord::Migration[8.0]
       t.references :action, null: false, foreign_key: { on_delete: :cascade }
       t.references :target_card, null: false, foreign_key: { to_table: :cards, on_delete: :cascade }
       t.timestamps default: -> { 'NOW()' }
-
-      t.index [:action_id, :target_card_id], unique: true, name: 'index_action_card_targets_on_action_and_card'
     end
   end
 

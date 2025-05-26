@@ -12,10 +12,10 @@ RSpec.describe Action, type: :model do
       tick_condition_key: 'default_tick_condition',
       tick_effect_key: 'default_tick_effect',
       max_tick_count: 3,
-      target_type_enum: 'none',
+      target_type_enum: 'enemy',
       target_count_min: 0,
       target_count_max: 0,
-      target_condition_key: nil
+      target_condition_key: ''
     )
   }
   let!(:character) { game_instance.characters.create!(name: 'Tester') }

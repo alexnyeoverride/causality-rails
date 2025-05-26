@@ -53,7 +53,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       it 'successfully declares an action, moves card to table, and spends an action point' do
         declared_action = nil
         expect {
-          declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_ids: [char2.id])
+          declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         }.to change { char1.reload.actions_remaining }.by(-1)
          .and change { Action.count }.by(1) 
         
@@ -61,14 +61,14 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         expect(declared_action.errors).to be_empty
         expect(declared_action.source).to eq(char1)
         expect(declared_action.card).to eq(char1_attack_card)
-        expect(declared_action.targets).to include(char2)
+        expect(declared_action.target_characters).to include(char2)
         expect(char1_attack_card.reload.location).to eq('table')
       end
 
       it 'advances initiative if the character runs out of actions' do
         char1.update!(actions_remaining: 1)
         allow(game).to receive(:process_actions!) 
-        declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_ids: [char2.id])
+        declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         expect(declared_action.errors).to be_empty
         expect(declared_action).to be_persisted
         expect(char1.reload.actions_remaining).to eq(0)
@@ -79,7 +79,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         char1.update!(actions_remaining: 0)
         action = nil
         expect {
-          action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_ids: [char2.id])
+          action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         }.not_to change(Action, :count)
         
         expect(action).not_to be_persisted
@@ -92,7 +92,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         char1_attack_card.update!(location: 'deck')
         action = nil
         expect {
-          action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_ids: [char2.id])
+          action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         }.not_to change(Action, :count)
         expect(action).not_to be_persisted
         expect(action.errors).not_to be_empty
@@ -103,7 +103,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         allow_any_instance_of(Action).to receive(:can_declare?).and_return(false)
         action = nil
         expect {
-          action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_ids: [char2.id])
+          action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         }.not_to change(Action, :count)
         expect(action).not_to be_persisted
         expect(action.errors).not_to be_empty
@@ -115,7 +115,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         char2.update!(reactions_remaining: 0)
         char3.update!(reactions_remaining: 0)
         expect_any_instance_of(Game).to receive(:process_actions!).and_call_original
-        declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_ids: [char2.id])
+        declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         expect(declared_action).to be_persisted
         expect(declared_action.errors).to be_empty
       end
@@ -124,7 +124,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
     context 'when declaring a reaction' do
       let!(:trigger_action) do
         allow(game).to receive(:process_actions!) 
-        action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_ids: [char2.id])
+        action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         action.update!(phase: 'declared') if action.persisted? && action.phase != 'declared'
         action
       end
@@ -191,7 +191,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       }
       before do
         allow(game.causality).to receive(:get_next_tickable).and_return(root_action, nil)
-        allow(root_action).to receive(:on_tick!) { root_action.fail!; } 
+        allow(root_action).to receive(:on_tick!) { root_action.update_column(:phase, :failed); } 
       end
 
       it 'recursively fails the action and its unresolved reactions, moving cards to discard' do

@@ -383,13 +383,6 @@ ALTER TABLE ONLY public.templates
 
 
 --
--- Name: index_action_card_targets_on_action_and_card; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_action_card_targets_on_action_and_card ON public.action_card_targets USING btree (action_id, target_card_id);
-
-
---
 -- Name: index_action_card_targets_on_action_id; Type: INDEX; Schema: public; Owner: -
 --
 
