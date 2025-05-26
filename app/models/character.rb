@@ -9,8 +9,6 @@ class Character < ApplicationRecord
 
   validates :name, presence: true
   validates :health, numericality: { greater_than_or_equal_to: 0 }
-  validates :actions_remaining, numericality: { greater_than_or_equal_to: 0 }
-  validates :reactions_remaining, numericality: { greater_than_or_equal_to: 0 }
 
   scope :alive, -> { where('health > 0') }
 
@@ -56,7 +54,7 @@ class Character < ApplicationRecord
   end
 
   def reset_turn_resources!
-    update!(actions_remaining: nil, reactions_remaining: nil)
+    update!(actions_remaining: DEFAULT_ACTIONS, reactions_remaining: DEFAULT_REACTIONS)
   end
 
   def alive?

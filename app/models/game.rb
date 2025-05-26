@@ -169,7 +169,7 @@ class Game < ApplicationRecord
 
         # TODO: create reusable repositioning logic for arbitary container-to-container transfers, and put that in the bulk operations concern.
         # `transfer(from: :table, to: :discard, for: action.source)` 
-        max_discard_pos = action.source.cards.where(location: 'discard').maximum(:position) || -1
+        max_discard_pos = tickable_action.source.cards.where(location: 'discard').maximum(:position) || -1
         new_position_in_discard = max_discard_pos + 1
         tickable_action.card.update(
           location: :discard,

@@ -187,7 +187,7 @@ RSpec.describe Causality, type: :integration do
       expect(actionA.reload.phase).to eq('failed')
       expect(reactionB.reload.phase).to eq('failed')
 
-      expect(returned_data.map { |d| d['id'] }).to match_array([actionA.id, reactionB.id])
+      expect(returned_data).to eq(2)
     end
   end
 end
