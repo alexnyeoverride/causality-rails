@@ -24,7 +24,7 @@ module CardBulkOperations
     if has_position_updates
       position_case_sql = "position = CASE id "
       relevant_positions_map.each do |card_id, new_pos|
-        position_case_sql << "WHEN #{card_id} THEN #{new_pos} "
+        position_case_sql << "WHEN #{card_id.to_i} THEN #{new_pos.to_i} "
       end
       position_case_sql << "ELSE position END"
       set_parts << position_case_sql
@@ -39,8 +39,12 @@ module CardBulkOperations
     bind_values << Time.current
 
     sql_set_clause = set_parts.join(', ')
+    affected_rows = 0
 
-    affected_rows = Card.where(id: safe_card_ids).update_all([sql_set_clause, *bind_values])
+    Card.transaction do
+      ActiveRecord::Base.connection.execute('SET CONSTRAINTS index_cards_on_owner_loc_pos_uniqueness DEFERRED')
+      affected_rows = Card.where(id: safe_card_ids).update_all([sql_set_clause, *bind_values])
+    end
 
     affected_rows > 0 ? safe_card_ids.sort : []
   end

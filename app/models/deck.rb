@@ -38,16 +38,11 @@ class Deck
       [card_id, new_positions_list[index]]
     end.to_h
 
-    # Defer the uniqueness constrain till transaction end, because the database by default checks the constraint after each row updated.
-    # TODO: put the transaction and the deferral directly into `bulk_update_cards`.
-    Card.transaction do
-      ActiveRecord::Base.connection.execute('SET CONSTRAINTS index_cards_on_owner_loc_pos_uniqueness DEFERRED')
-      bulk_update_cards(
-        card_ids_to_update: card_to_new_position_map.keys,
-        new_positions_map: card_to_new_position_map,
-        target_location_name: 'deck'
-      )
-    end
+    bulk_update_cards(
+      card_ids_to_update: card_to_new_position_map.keys,
+      new_positions_map: card_to_new_position_map,
+      target_location_name: 'deck'
+    )
   end
 
   def pop!(number_to_draw = 1)

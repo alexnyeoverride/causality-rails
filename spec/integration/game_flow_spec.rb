@@ -55,8 +55,8 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         expect {
           declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         }.to change { char1.reload.actions_remaining }.by(-1)
-         .and change { Action.count }.by(1) 
-        
+         .and change { Action.count }.by(1)
+
         expect(declared_action).to be_persisted
         expect(declared_action.errors).to be_empty
         expect(declared_action.source).to eq(char1)
@@ -67,12 +67,12 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
 
       it 'advances initiative if the character runs out of actions' do
         char1.update!(actions_remaining: 1)
-        allow(game).to receive(:process_actions!) 
+        allow(game).to receive(:process_actions!)
         declared_action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         expect(declared_action.errors).to be_empty
         expect(declared_action).to be_persisted
         expect(char1.reload.actions_remaining).to eq(0)
-        expect(game.reload.current_character).to eq(char2) 
+        expect(game.reload.current_character).to eq(char2)
       end
 
       it 'returns an unpersisted action with errors if character cannot afford it' do
@@ -81,7 +81,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         expect {
           action = game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
         }.not_to change(Action, :count)
-        
+
         expect(action).not_to be_persisted
         expect(action.errors).not_to be_empty
         expect(action.errors[:base]).to include("Character cannot afford this action.")
@@ -123,13 +123,13 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
 
     context 'when declaring a reaction' do
       let!(:trigger_action) do
-        allow(game).to receive(:process_actions!) 
+        allow(game).to receive(:process_actions!)
         game.declare_action(source_character_id: char1.id, card_id: char1_attack_card.id, target_character_ids: [char2.id])
       end
       before do
-        allow(game).to receive(:process_actions!).and_call_original 
+        allow(game).to receive(:process_actions!).and_call_original
         char1.update!(actions_remaining: Character::DEFAULT_ACTIONS)
-        allow(game.initiative).to receive(:advance!) 
+        allow(game.initiative).to receive(:advance!)
       end
       it 'successfully declares a reaction, spends a reaction point' do
         expect(trigger_action.reload.phase).to eq('declared')
@@ -137,8 +137,8 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         expect {
           reaction = game.declare_action(source_character_id: char2.id, card_id: char2_reaction_card.id, trigger_action_id: trigger_action.id)
         }.to change { char2.reload.reactions_remaining }.by(-1)
-         .and change { Action.count }.by(1) 
-        
+         .and change { Action.count }.by(1)
+
         expect(reaction).to be_persisted
         expect(reaction.errors).to be_empty
         expect(reaction.source).to eq(char2)
@@ -149,12 +149,22 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       it 'advances trigger phase to "reacted_to" if all living characters react or pass' do
         game.declare_action(source_character_id: char1.id, card_id: char1_pass_card.id, trigger_action_id: trigger_action.id)
         game.declare_action(source_character_id: char2.id, card_id: char2_reaction_card.id, trigger_action_id: trigger_action.id)
-        expect(trigger_action.reload.phase).to eq('declared') 
+        expect(trigger_action.reload.phase).to eq('declared')
         game.declare_action(source_character_id: char3.id, card_id: char3_pass_card.id, trigger_action_id: trigger_action.id)
         expect(trigger_action.reload.phase).to eq('reacted_to')
       end
 
-      # TODO: test that it advances to "reacted_to" if a subset of characters all react, but the only characters not to react are dead.
+      it 'advances trigger phase to "reacted_to" if non-reacting characters are dead' do
+        char_dead = game.characters.create!(name: 'Dead Dave', health: 100, actions_remaining: 0, reactions_remaining: 0)
+        char_dead.cards.create!(template: pass_template, location: 'hand', position: 0)
+        char_dead.update!(health: 0)
+
+        expect(trigger_action.reload.phase).to eq('declared')
+        game.declare_action(source_character_id: char2.id, card_id: char2_reaction_card.id, trigger_action_id: trigger_action.id)
+        expect(trigger_action.reload.phase).to eq('declared')
+        game.declare_action(source_character_id: char3.id, card_id: char3_pass_card.id, trigger_action_id: trigger_action.id)
+        expect(trigger_action.reload.phase).to eq('reacted_to')
+      end
     end
   end
 
@@ -192,7 +202,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       }
       before do
         allow(game.causality).to receive(:get_next_tickable).and_return(root_action, nil)
-        allow(root_action).to receive(:on_tick!) { root_action.update_column(:phase, :failed); } 
+        allow(root_action).to receive(:on_tick!) { root_action.update_column(:phase, :failed); }
       end
 
       it 'recursively fails the action and its unresolved reactions, moving cards to discard' do
@@ -213,7 +223,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       char2.update!(health: 0)
       expect(game.is_over?).to be true
       char3.update!(health: 0)
-      expect(game.is_over?).to be true 
+      expect(game.is_over?).to be true
     end
   end
 end

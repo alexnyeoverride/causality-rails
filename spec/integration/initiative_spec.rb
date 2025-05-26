@@ -40,6 +40,22 @@ RSpec.describe Initiative, type: :integration do
         expect(char_b.reload.actions_remaining).to eq(Character::DEFAULT_ACTIONS)
         expect(char_c.reload.actions_remaining).to eq(Character::DEFAULT_ACTIONS)
       end
+
+      it 'does not reset resources when advancing to a character with actions remaining' do
+        game.update!(current_character: char_a)
+        char_b.update!(actions_remaining: 1, reactions_remaining: 1)
+
+        expect(char_a).not_to receive(:reset_turn_resources!)
+        expect(char_b).not_to receive(:reset_turn_resources!)
+        expect(char_c).not_to receive(:reset_turn_resources!)
+
+        next_char = initiative.advance!(is_reaction_phase: false)
+        expect(next_char).to eq(char_b)
+
+        expect(char_a.reload.actions_remaining).to eq(2)
+        expect(char_b.reload.actions_remaining).to eq(1)
+        expect(char_b.reload.reactions_remaining).to eq(1)
+      end
     end
 
     context 'during reaction phase (is_reaction_phase: true)' do
