@@ -273,6 +273,7 @@ RSpec.describe GameChannel, type: :channel do
         source_character_id: character.id,
         card_id: @card_to_play.id,
         target_character_ids: [],
+        target_card_ids: [],
         trigger_action_id: nil
       ).and_return(action_with_errors)
 

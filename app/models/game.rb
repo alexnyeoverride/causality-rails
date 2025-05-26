@@ -97,7 +97,7 @@ class Game < ApplicationRecord
       return action_to_process
     end
 
-    unless card_record.location == :hand
+    unless card_record.location == 'hand'
       action_to_process.errors.add(:base, "Card not in player's hand.")
       return action_to_process
     end
