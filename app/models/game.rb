@@ -30,7 +30,17 @@ class Game < ApplicationRecord
             deck_cards_to_create << { owner_character_id: character.id, template_id: template.id, location: 'deck' }
           end
         end
-        Card.insert_all(deck_cards_to_create) if deck_cards_to_create.any?
+        Card.insert_all(deck_cards_to_create)
+
+        Card.where(owner_character_id: character.id, location: 'deck').find_each do |card|
+          template = all_templates.find { |t| t.id == card.template_id}
+          next unless template
+          card.target_type_enum = template.target_type_enum
+          card.target_count_min = template.target_count_min
+          card.target_count_max = template.target_count_max
+          card.target_condition_key = template.target_condition_key
+          card.save!
+        end
 
         character.shuffle_deck!
         character.draw_cards_from_deck!(STARTING_HAND_SIZE)
@@ -43,7 +53,7 @@ class Game < ApplicationRecord
     end
   end
 
-  def declare_action(source_character_id:, card_id:, target_ids: [], trigger_action_id: nil)
+  def declare_action(source_character_id:, card_id:, target_character_ids: [], target_card_ids: [], trigger_action_id: nil)
     action_to_process = Action.new(game: self)
 
     source_character = self.characters.find_by(id: source_character_id)
@@ -63,7 +73,11 @@ class Game < ApplicationRecord
     action_to_process.initialize_from_template_and_attributes(
       card_record.template,
       source_character,
-      { trigger_id: trigger_action_id, target_ids: target_ids }
+      {
+        trigger_id: trigger_action_id,
+        target_character_ids: target_character_ids,
+        target_card_ids: target_card_ids
+      }
     )
 
     unless source_character.alive?
@@ -81,8 +95,7 @@ class Game < ApplicationRecord
       return action_to_process
     end
 
-    game_context = { game: self }
-    unless action_to_process.can_declare?(game_context)
+    unless action_to_process.can_declare?
       action_to_process.errors.add(:base, "Action cannot be declared at this time (preconditions failed).")
       return action_to_process
     end
@@ -119,9 +132,12 @@ class Game < ApplicationRecord
   end
 
   def process_actions!
-    game_context = { game: self }
+    # TODO: Consider how "enchantments" or "auras" might modify actions before they tick,
+    # or react to actions being processed. This might involve checking a game-level
+    # list of active global effects or character-specific persistent effects.
+
     while (tickable_action = causality.get_next_tickable) do
-      tickable_action.on_tick!(game_context)
+      tickable_action.on_tick!
 
       if tickable_action.max_tick_count.present? && tickable_action.max_tick_count > 0
         tickable_action.decrement!(:max_tick_count) if tickable_action.persisted?
@@ -129,7 +145,7 @@ class Game < ApplicationRecord
 
       tickable_action.reload
 
-      can_tick_again = tickable_action.can_tick?(game_context)
+      can_tick_again = tickable_action.can_tick?
       should_resolve_due_to_completion = !can_tick_again || \
         (tickable_action.max_tick_count.present? && tickable_action.max_tick_count <= 0)
 
@@ -138,7 +154,7 @@ class Game < ApplicationRecord
       end
 
       if should_resolve_due_to_completion && !['resolved', 'failed'].include?(tickable_action.phase.to_s)
-        tickable_action.resolve!
+        tickable_action.update!(phase: 'resolved')
         if tickable_action.card.location.to_s == 'table'
             tickable_action.source.discard_pile.add!([tickable_action.card])
         end
@@ -184,3 +200,4 @@ class Game < ApplicationRecord
     self.characters.alive.count <= 1
   end
 end
+

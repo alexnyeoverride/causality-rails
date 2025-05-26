@@ -8,9 +8,9 @@ RSpec.describe CharacterCardManager, type: :integration do
       name: 'Generic Card',
       description: 'A card',
       resolution_timing: 'before',
-      declarability_key: 'default_declarability_key',
-      tick_condition_key: 'default_tick_condition_key',
-      tick_effect_key: 'default_tick_effect_key',
+      declarability_key: 'dk',
+      tick_condition_key: 'tck',
+      tick_effect_key: 'tek',
       max_tick_count: 1,
       target_type_enum: 'none',
       target_count_min: 0,
@@ -84,6 +84,18 @@ RSpec.describe CharacterCardManager, type: :integration do
         expect(drawn_cards.count).to eq(0)
         expect(character.hand.count).to eq(initial_hand_count)
       end
+    end
+  end
+
+  describe '#discard_cards_from_hand!' do
+    it 'moves specified cards from hand to discard pile' do
+      discarded_relation = manager.discard_cards_from_hand!([card_hand1.id])
+      discarded_cards = discarded_relation.to_a
+
+      expect(discarded_cards.map(&:id)).to eq([card_hand1.id])
+      expect(character.hand.count).to eq(0)
+      expect(character.discard_pile.count).to eq(2)
+      expect(card_hand1.reload.location).to eq('discard')
     end
   end
 

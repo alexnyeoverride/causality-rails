@@ -118,7 +118,8 @@ class GameChannel < ApplicationCable::Channel
     end
 
     card_id = data["card_id"]
-    target_ids = data.fetch("target_character_ids", [])
+    target_character_ids = data.fetch("target_character_ids", [])
+    target_card_ids = data.fetch("target_card_ids", [])
     trigger_action_id = data["trigger_id"]
 
     unless card_id
@@ -127,10 +128,14 @@ class GameChannel < ApplicationCable::Channel
     end
 
     begin
+      # TODO: For "enchantments" or "auras" that trigger on declaration,
+      # this is a point where those effects could be checked and applied
+      # before or after the action is formally declared/saved.
       declared_action = game.declare_action(
         source_character_id: @current_character_id,
         card_id: card_id,
-        target_ids: target_ids,
+        target_character_ids: target_character_ids,
+        target_card_ids: target_card_ids,
         trigger_action_id: trigger_action_id
       )
 
@@ -140,7 +145,7 @@ class GameChannel < ApplicationCable::Channel
       elsif declared_action.errors.any?
         transmit_error("Failed to declare action: #{declared_action.errors.full_messages.join(', ')}")
       else
-        transmit_error("Failed to declare action. Action was not persisted and had no errors (this indicates an unexpected state and potential bug in Game#declare_action).")
+        transmit_error("Failed to declare action. Action was not persisted and had no errors.")
       end
     rescue StandardError => e
       transmit_error("An unexpected error occurred while declaring action: #{e.message}")
@@ -180,7 +185,7 @@ class GameChannel < ApplicationCable::Channel
   def broadcast_game_state(game_id, event_message = nil)
     game = Game.includes(
       characters: [:cards => :template],
-      actions: [:card, :source, :action_targets, :trigger]
+      actions: [:card, :source, :action_character_targets, :action_card_targets, :trigger]
     ).find_by(id: game_id)
     return unless game
 
@@ -206,7 +211,13 @@ class GameChannel < ApplicationCable::Channel
               {
                 id: card.id,
                 name: card.template.name,
-                description: card.template.description
+                description: card.template.description,
+                resolution_timing: card.template.resolution_timing,
+                is_free: card.template.is_free,
+                target_type_enum: card.target_type_enum,
+                target_count_min: card.target_count_min,
+                target_count_max: card.target_count_max,
+                target_condition_key: card.target_condition_key
               }
             end
           end
@@ -224,7 +235,8 @@ class GameChannel < ApplicationCable::Channel
             resolution_timing: action.resolution_timing,
             is_free: action.is_free,
             max_tick_count: action.max_tick_count,
-            target_character_ids: action.action_targets.pluck(:target_character_id)
+            target_character_ids: action.action_character_targets.pluck(:target_character_id),
+            target_card_ids: action.action_card_targets.pluck(:target_card_id)
           }
         end,
         is_over: game.is_over?,
@@ -242,3 +254,4 @@ class GameChannel < ApplicationCable::Channel
     transmit({ type: "error", message: message })
   end
 end
+
