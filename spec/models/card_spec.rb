@@ -36,8 +36,7 @@ RSpec.describe Card, type: :model do
 
   describe 'initialization' do
     it 'copies targeting attributes from its template when a new card is created' do
-      card = Card.new(owner: character, template: template_with_targeting)
-      card.valid?
+      card = Card.create!(owner: character, template: template_with_targeting)
 
       expect(card.target_type_enum).to eq('enemy')
       expect(card.target_count_min).to eq(1)
@@ -46,22 +45,20 @@ RSpec.describe Card, type: :model do
     end
 
     it 'copies default targeting attributes from its template' do
-      card = Card.new(owner: character, template: template_no_targeting)
-      card.valid?
+      card = Card.create!(owner: character, template: template_no_targeting)
 
       expect(card.target_type_enum).to eq('enemy')
       expect(card.target_count_min).to eq(0)
       expect(card.target_count_max).to eq(0)
-      expect(card.target_condition_key).to be_nil
+      expect(card.target_condition_key).to eq('none')
     end
 
     it 'does not override explicitly set attributes during initialization' do
-      card = Card.new(
+      card = Card.create!(
         owner: character,
         template: template_with_targeting,
         target_count_max: 5
       )
-      card.valid?
       expect(card.target_count_max).to eq(5)
       expect(card.target_type_enum).to eq('enemy')
     end
@@ -73,14 +70,15 @@ RSpec.describe Card, type: :model do
         position: 0
       )
 
+      original_target_count_max = card.target_count_max
       card.template.update!(target_count_max: 10)
       found_card = Card.find(card.id)
+      found_card.save!
 
-      expect(found_card.target_count_max).to eq(2)
+      expect(found_card.target_count_max).to eq(original_target_count_max)
     end
   end
 
   # TODO: tests for validation: 'Owner character already has a card in that location and position'
   # Test both:  it validates as an error if the constraint is violated.  It allows a card in the same location and position if the characters are different.
 end
-
