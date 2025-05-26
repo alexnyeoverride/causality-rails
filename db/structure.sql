@@ -367,6 +367,14 @@ ALTER TABLE ONLY public.games
 
 
 --
+-- Name: cards index_cards_on_owner_loc_pos_uniqueness; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cards
+    ADD CONSTRAINT index_cards_on_owner_loc_pos_uniqueness UNIQUE (owner_character_id, location, "position") DEFERRABLE;
+
+
+--
 -- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -464,13 +472,6 @@ CREATE INDEX index_actions_on_trigger_id ON public.actions USING btree (trigger_
 --
 
 CREATE INDEX index_cards_on_owner_character_id ON public.cards USING btree (owner_character_id);
-
-
---
--- Name: index_cards_on_owner_loc_pos_uniqueness; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_cards_on_owner_loc_pos_uniqueness ON public.cards USING btree (owner_character_id, location, "position");
 
 
 --
@@ -597,6 +598,7 @@ ALTER TABLE ONLY public.action_card_targets
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20250526203912'),
 ('20250526191050'),
 ('20250526161111'),
 ('20250526150956'),

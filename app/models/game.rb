@@ -58,7 +58,7 @@ class Game < ApplicationRecord
           end
         end
       end
-      Card.insert_all(cards_to_create)
+      Card.insert_all(cards_to_create, unique_by: :id)
 
       self.update!(current_character_id: characters.order(:id).first.id)
     end
@@ -126,6 +126,7 @@ class Game < ApplicationRecord
         if spent_last_of_resource
           is_reaction = !action_to_process.trigger_id.nil?
           initiative.advance!(is_reaction_phase: is_reaction)
+          # TODO: notify client of initiative advancement
           self.reload
         end
       end
