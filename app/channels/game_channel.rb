@@ -143,10 +143,8 @@ class GameChannel < ApplicationCable::Channel
       if declared_action.persisted?
         source_character_name = Character.find(@current_character_id).name
         broadcast_game_state(@current_game_id, "Action #{declared_action.id} declared by #{source_character_name}.")
-      elsif declared_action.errors.any?
-        transmit_error("Failed to declare action: #{declared_action.errors.full_messages.join(', ')}")
       else
-        transmit_error("Failed to declare action. Action was not persisted and had no errors. This indicates a potential issue in the action declaration logic.")
+        transmit_error("Failed to declare action: #{declared_action.errors.full_messages.join(', ')}")
       end
     rescue StandardError => e
       Rails.logger.error "Declare Action Error: #{e.message}\n#{e.backtrace.join("\n")}"
