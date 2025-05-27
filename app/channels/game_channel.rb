@@ -187,9 +187,6 @@ class GameChannel < ApplicationCable::Channel
     return nil unless card && card.template
     {
       id: card.id,
-      owner_character_id: card.owner_character_id,
-      location: card.location.to_s,
-      position: card.position,
       name: card.template.name,
       description: card.template.description,
       resolution_timing: card.template.resolution_timing.to_s,
@@ -200,7 +197,8 @@ class GameChannel < ApplicationCable::Channel
       target_condition_key: card.target_condition_key
     }
   end
-  
+ 
+  # TODO: this absolutely is in the wrong place 
   def deal_initial_cards_to_character(character)
     return unless character && character.cards.empty?
     game = character.game
