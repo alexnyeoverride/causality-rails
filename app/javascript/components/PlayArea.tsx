@@ -3,47 +3,16 @@ import Card from './Card';
 import type { ActionData, CardData } from '../store';
 
 interface PlayAreaProps {
-  activeActions?: ActionData[];
-  cardsOnTable?: CardData[];
-  onCardClick?: (cardId: string) => void;
+  activeActions: ActionData[];
+  onCardClick: (cardId: string) => void;
   className?: string;
   style?: React.CSSProperties;
 }
 
-const PlayArea: React.FC<PlayAreaProps> = ({ activeActions = [], cardsOnTable = [], onCardClick, className, style }) => {
-  const renderAction = (action: ActionData, allActions: ActionData[], level: number = 0) => {
-    const reactions = allActions.filter(a => a.trigger_id === action.id);
-    const cardForAction = action.card;
-
-    useEffect(() => {
-      // TODO: animate appearance/disappearance/phase changes of activeActionsFromStore
-    }, [activeActionsFromStore]);
-
-    useEffect(() => {
-      // TODO: animate cardsOnTableFromStore changes if needed (e.g. cards played directly to table not via actions)
-    }, [cardsOnTableFromStore]);
-
-    return (
-      <div key={action.id} style={{ marginLeft: `${level * 30}px`, marginBottom: '10px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>
-        <div style={{ fontWeight: 'bold' }}>
-          Action: {action.id} ({action.phase})
-          {cardForAction && ` - Card: ${cardForAction.name}`}
-        </div>
-        {cardForAction && <Card cardData={cardForAction} onClick={onCardClick ? () => onCardClick(cardForAction.id) : undefined} />}
-        <div>Source: {action.source_id}</div>
-        {action.target_character_ids && action.target_character_ids.length > 0 && (
-          <div>Targets: {action.target_character_ids.map(tId => `${tId}`).join(', ')}</div>
-        )}
-        {reactions.length > 0 && (
-          <div style={{ marginTop: '5px' }}>
-            {reactions.map(reaction => renderAction(reaction, allActions, level + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const rootActions = activeActions.filter(action => !action.trigger_id || !activeActions.find(a => a.id === action.trigger_id));
+const PlayArea: React.FC<PlayAreaProps> = ({ activeActions = [], onCardClick, className, style }) => {
+  useEffect(() => {
+    // TODO: animate appearance/disappearance/phase changes of activeActionsFromStore
+  }, [activeActions.length]);
 
   const combinedStyles: React.CSSProperties = {
     padding: '20px',
@@ -60,15 +29,12 @@ const PlayArea: React.FC<PlayAreaProps> = ({ activeActions = [], cardsOnTable = 
       style={combinedStyles}
       className={className}
     >
-      <h3 style={{textAlign: 'center', marginTop: 0}}>Play Area (Causality Chains)</h3>
-      {rootActions.length > 0 ? (
-        rootActions.map(action => renderAction(action, activeActions))
-      ) : (
-        <p style={{textAlign: 'center'}}>No active actions.</p>
-      )}
-       <h4 style={{textAlign: 'center', marginTop: '20px', borderTop: '1px dashed purple', paddingTop: '10px'}}>Other Cards on Table:</h4>
-      {cardsOnTable.filter(ct => !activeActions.some(aa => aa.card && aa.card.id === ct.id)).map(card => (
-        <Card key={card.id} cardData={card} onClick={onCardClick ? () => onCardClick(card.id) : undefined } />
+      {activeActions.map(action => (
+        action.card ? <Card
+          key={action.card.id}
+          cardData={action.card}
+          onClick={() => action.card && onCardClick(action.card.id)}
+       /> : <></>
       ))}
     </div>
   );

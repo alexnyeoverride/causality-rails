@@ -19,7 +19,7 @@ const Hand: React.FC<HandProps> = ({ cards, cardCount, revealed, onCardClick, ca
     // TODO: animate changes to the list of cards (cards appearing/disappearing)
     // This is more complex for list animations; consider libraries like Framer Motion's AnimatePresence
     // Also the animation needs to coordinate between multiple containers, for drawing *from* a deck *into* a hand.
-  }, [cards, cardCount]); // Watching both `cards` array (if revealed) and `cardCount`
+  }, [cardCount]); // Watching both `cards` array (if revealed) and `cardCount`
 
   return (
     <div
@@ -41,7 +41,7 @@ const Hand: React.FC<HandProps> = ({ cards, cardCount, revealed, onCardClick, ca
             key={card.id}
             cardData={card}
             onClick={onCardClick}
-            isPlayable={onCardClick && canAffordCard ? canAffordCard(card) : undefined}
+            isPlayable={/* TODO: get can_declare from the backend */ canAffordCard ? canAffordCard(card) : undefined}
             isSelected={cardPlayMachineState.selectedCard?.id === card.id}
           />
         ))

@@ -55,7 +55,7 @@ const GameInfo: React.FC<GameInfoProps> = ({ className, style, cardPlayMachine }
               {cardMachineState.selectedCard?.target_count_max && cardMachineState.selectedCard.target_count_max > 0 && cardMachineState.selectedCard.target_type_enum !== 'self' ? 'Proceed to Targeting' : 'Confirm Play'}
             </button>
           )}
-          {cardMachineState.step === 'characterTargetsSelected' || cardMachineState.step === 'cardTargetsSelected' && (
+          {(cardMachineState.step === 'characterTargetsSelected' || cardMachineState.step === 'cardTargetsSelected') && (
              <button onClick={confirmPlay} style={{margin: '5px', padding: '8px', backgroundColor: 'green', color: 'white'}}>Confirm Targets & Play</button>
           )}
            {cardMachineState.step === 'confirming' && (

@@ -56,8 +56,8 @@ const GameView: React.FC = () => {
 
       <PlayArea
         className="play-area"
+	activeActions={gameState.active_actions}
         style={{ flexGrow: 1, margin: '10px 0' }}
-        cardPlayMachine={cardPlayMachine}
       />
 
       {currentPlayer && (
