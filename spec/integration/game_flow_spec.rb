@@ -3,7 +3,7 @@ require 'rails_helper'
 RSpec.describe 'Game Flow and Action Declaration', type: :integration do
   let!(:game) { Game.create! }
   let!(:attack_template) { Template.create!(name: 'Attack', description: 'Deal damage', resolution_timing: 'before', declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
-  let!(:pass_template) { Template.create!(name: 'Pass', description: 'Do nothing', resolution_timing: 'before', declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
+  let!(:pass_template) { Template.create!(name: 'Pass', description: 'Do nothing', resolution_timing: 'before', declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1, is_free: true) }
   let!(:reaction_template) { Template.create!(name: 'Dodge', description: 'Avoid attack', resolution_timing: 'before', declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
 
   let!(:failing_root_action_template) {
@@ -230,7 +230,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       template = is_skip ? pass_template : reaction_template
       card = source.cards.create!(template: template, location: 'hand', position: source.cards.count)
       expect(game.causality.get_next_trigger).to eq expected_trigger
-      action = game.declare_action(source_character_id: source.id, card_id: card.id, trigger_action_id: expected_trigger)
+      action = game.declare_action(source_character_id: source.id, card_id: card.id, trigger_action_id: expected_trigger&.id)
       expect(action).to be_persisted
       expected_trigger&.reload
       expect(expected_trigger&.phase).to eq expected_trigger_phase
@@ -292,7 +292,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         # layer 2, row r1_a1
         r1_r1_a1 = declare_and_check(
           source: char2,
-          expected_trigger: a1,
+          expected_trigger: r1_a1,
           expected_trigger_phase: 'declared',
           expected_remaining_actions: 2,
           expected_remaining_reactions: 1,
@@ -301,7 +301,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         )
         r2_r1_a1 = declare_and_check(
           source: char3,
-          expected_trigger: a1,
+          expected_trigger: r1_a1,
           expected_trigger_phase: 'declared',
           expected_remaining_actions: 2,
           expected_remaining_reactions: 1,
@@ -310,7 +310,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         )
         r3_r1_a1 = declare_and_check(
           source: char1,
-          expected_trigger: a1,
+          expected_trigger: r1_a1,
           expected_trigger_phase: 'reacted_to',
           expected_remaining_actions: 0,
           expected_remaining_reactions: 0,
@@ -321,7 +321,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         # layer 2, row r2_a1
         r1_r2_a1 = declare_and_check(
           source: char2,
-          expected_trigger: a1,
+          expected_trigger: r2_a1,
           expected_trigger_phase: 'declared',
           expected_remaining_actions: 2,
           expected_remaining_reactions: 0,
@@ -330,7 +330,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         )
         r2_r2_a1 = declare_and_check(
           source: char3,
-          expected_trigger: a1,
+          expected_trigger: r2_a1,
           expected_trigger_phase: 'reacted_to',
           expected_remaining_actions: 2,
           expected_remaining_reactions: 1,
@@ -343,7 +343,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
 	# char2 is out of reactions
         r1_r3_a1 = declare_and_check(
           source: char3,
-          expected_trigger: a1,
+          expected_trigger: r3_a1,
           expected_trigger_phase: 'reacted_to',
           expected_remaining_actions: 2,
           expected_remaining_reactions: 1,
@@ -362,7 +362,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         # char2 is out of actions
         r1_r3_r3_a1 = declare_and_check(
           source: char3,
-          expected_trigger: a1,
+          expected_trigger: r3_r3_a1,
           expected_trigger_phase: 'reacted_to',
           expected_remaining_actions: 2,
           expected_remaining_reactions: 0,
