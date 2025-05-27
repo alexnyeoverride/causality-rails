@@ -124,8 +124,6 @@ class Causality
     Card.where(id: result.map {|r| r['card_id']}).update_all(location: :discard)
   end
 
-  private
-
   def check_and_advance_trigger_phase(trigger_action)
     potential_reactors = game.characters.alive.to_a
 
