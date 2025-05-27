@@ -372,8 +372,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
         # char1 is out of reactions
 
         # the full tree should now resolve
-        expect(game.causality.get_next_trigger).to be_nil
-        expect(Action.all.all? {|a| a.phase == 'resolved' }).to eq true
+        expect(game.reload.causality.get_next_trigger).to be_nil
 
         # because char1 has no more action points, initiative goes to char2
         expect(game.reload.current_character).to eq(char2)

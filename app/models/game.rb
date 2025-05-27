@@ -128,7 +128,27 @@ class Game < ApplicationRecord
   end
 
   def process_actions!
-    while (tickable_action = causality.get_next_tickable) do
+    loop do
+      tickable_action = causality.get_next_tickable
+
+      if tickable_action.nil?
+        stranded_declared_action = causality.get_next_trigger
+
+        if stranded_declared_action
+          can_anyone_react = self.characters.alive.any? { |c| c.reactions_remaining > 0 }
+
+          if !can_anyone_react
+            stranded_declared_action.update_column(:phase, :reacted_to)
+            tickable_action = stranded_declared_action
+            next
+          else
+            break
+          end
+        else
+          break
+        end
+      end
+
       tickable_action.on_tick!
 
       if tickable_action.max_tick_count.present? && tickable_action.max_tick_count > 0

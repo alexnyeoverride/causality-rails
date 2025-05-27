@@ -7,10 +7,7 @@ class Causality
 
   def add(action_to_save:)
     action_to_save.save
-
-    if action_to_save.persisted?
-      check_and_advance_trigger_phase(action_to_save.trigger) if action_to_save.trigger_id.present?
-    end
+    check_and_advance_trigger_phase(action_to_save.trigger) if action_to_save.trigger_id.present?
     action_to_save
   end
 
