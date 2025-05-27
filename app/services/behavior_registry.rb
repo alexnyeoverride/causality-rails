@@ -86,6 +86,7 @@ module BehaviorRegistry
       return unless trigger && trigger.source && trigger.card
       card_to_return = trigger.card
       owner = trigger.source
+      # TODO: use transfer_card_to_location helper for this
       max_pos = owner.cards.where(location: 'hand').maximum(:position) || -1
       new_pos = (max_pos || -1) + 1
       card_to_return.update!(location: 'hand', position: new_pos)
