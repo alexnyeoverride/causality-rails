@@ -27,9 +27,8 @@ module BehaviorRegistry
       trigger_action.character_target_ids.include?(action.source_id)
     },
     'declarable_if_self_health_below_percentage' => ->(game, action) {
-      health_percentage_threshold = action.card.template.target_count_min || 25
       source_char = game.characters.find_by(id: action.source_id)
-      source_char.health < health_percentage_threshold
+      source_char.health < 25
     },
     'declarable_if_trigger_is_card_name' => ->(game, action) {
       expected_card_name = action.card.template.target_condition_key
@@ -63,16 +62,23 @@ module BehaviorRegistry
     },
 
     'deal_damage_to_targets_from_max_tick_count' => ->(game, action) {
-      damage_amount = action.max_tick_count > 0 ? action.max_tick_count : 1
+      damage_amount = action.trigger.max_tick_count
 
-      fresh_action = Action.includes(:character_targets).find(action.id)
+      target_character_ids = ActionCharacterTarget.where(action_id: action.id).pluck(:target_character_id)
 
-      fresh_action.character_targets.each do |target_character|
-        if target_character.alive?
-          new_health = target_character.health - damage_amount
-          target_character.update!(health: [new_health, 0].max)
-        end
-      end
+      return if target_character_ids.empty?
+
+      sql_update = <<-SQL
+        UPDATE characters
+        SET health = CASE
+                       WHEN health - #{damage_amount.to_i} < 0 THEN 0
+                       ELSE health - #{damage_amount.to_i}
+                     END
+        WHERE id IN (#{target_character_ids.join(',')}) AND health > 0;
+      SQL
+
+      ActiveRecord::Base.connection.execute(sql_update)
+      action.trigger.update_column(:max_tick_count, 0, phase: :resolved)
     },
     'deal_damage_to_trigger_source_from_max_tick_count' => ->(game, action) {
       return unless action.trigger
