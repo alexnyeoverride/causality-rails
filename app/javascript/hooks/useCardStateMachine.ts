@@ -1,19 +1,19 @@
 import React from 'react';
 import useGameStore from '../store';
+import type { CardData } from '../store';
 
-export type CardPlayStep = 'idle' | 'cardSelected' | 'targetsSelected' | 'confirming';
+export type CardPlayStep = 'idle' | 'cardSelected' | 'characterTargetsSelected' | 'cardTargetsSelected' | 'confirming';
 
 export interface CardPlayMachineState {
   step: CardPlayStep;
-  selectedCardId: string | null;
-  selectedCardRequiresTargets: boolean;
-  maxTargets: number;
-  selectedTargetIds: string[];
+  selectedCard: CardData | null;
+  selectedCharacterTargetIds: string[];
+  selectedCardTargetIds: string[];
 }
 
 export interface CardPlayMachineAPI {
   state: CardPlayMachineState;
-  selectCard: (cardId: string, requiresTargets?: boolean, maxTargets?: number) => void;
+  selectCard: (card: CardData) => void;
   toggleTarget: (targetId: string) => void;
   proceedToTargetingOrConfirm: () => void;
   confirmPlay: () => void;
@@ -22,45 +22,66 @@ export interface CardPlayMachineAPI {
 
 const initialState: CardPlayMachineState = {
   step: 'idle',
-  selectedCardId: null,
-  selectedCardRequiresTargets: false,
-  maxTargets: 0,
-  selectedTargetIds: [],
+  selectedCard: null,
+  selectedCharacterTargetIds: [],
+  selectedCardTargetIds: [],
 };
 
 export function useCardStateMachine(): CardPlayMachineAPI {
   const [state, setState] = React.useState<CardPlayMachineState>(initialState);
-  const { performAction } = useGameStore();
+  const { performAction } = useGameStore.getState();
 
-  const selectCard = (cardId: string, requiresTargets: boolean = false, maxTargets: number = 0) => {
+  const selectCard = (card: CardData) => {
     setState({
       step: 'cardSelected',
-      selectedCardId: cardId,
-      selectedCardRequiresTargets: requiresTargets,
-      maxTargets: requiresTargets ? (maxTargets > 0 ? maxTargets : 1) : 0,
-      selectedTargetIds: [],
+      selectedCard: card,
+      selectedCharacterTargetIds: [],
+      selectedCardTargetIds: [],
     });
   };
 
   const toggleTarget = (targetId: string) => {
     setState(s => {
-      if (s.step !== 'targetsSelected') return s;
-      const newTargets = s.selectedTargetIds.includes(targetId)
-        ? s.selectedTargetIds.filter(id => id !== targetId)
-        : [...s.selectedTargetIds, targetId];
+      if (!s.selectedCard || (s.step !== 'characterTargetsSelected' && s.step !== 'cardTargetsSelected')) return s;
 
-      if (s.maxTargets > 0 && newTargets.length > s.maxTargets) {
-        return s; 
+      let currentTargets: string[];
+      let maxTargets = 0;
+
+      if (s.selectedCard.target_type_enum === 'enemy' || s.selectedCard.target_type_enum === 'ally' || s.selectedCard.target_type_enum === 'self') {
+        currentTargets = s.selectedCharacterTargetIds;
+        maxTargets = s.selectedCard.target_count_max;
+      } else if (s.selectedCard.target_type_enum === 'card') {
+        currentTargets = s.selectedCardTargetIds;
+        maxTargets = s.selectedCard.target_count_max;
+      } else {
+        return s;
       }
-      return { ...s, selectedTargetIds: newTargets };
+
+      const newTargets = currentTargets.includes(targetId)
+        ? currentTargets.filter(id => id !== targetId)
+        : [...currentTargets, targetId];
+
+      if (maxTargets > 0 && newTargets.length > maxTargets) {
+        return s;
+      }
+
+      if (s.selectedCard.target_type_enum === 'enemy' || s.selectedCard.target_type_enum === 'ally' || s.selectedCard.target_type_enum === 'self') {
+        return { ...s, selectedCharacterTargetIds: newTargets };
+      } else if (s.selectedCard.target_type_enum === 'card') {
+        return { ...s, selectedCardTargetIds: newTargets };
+      }
+      return s;
     });
   };
 
   const proceedToTargetingOrConfirm = () => {
     setState(s => {
-      if (s.step !== 'cardSelected' || !s.selectedCardId) return s;
-      if (s.selectedCardRequiresTargets) {
-        return { ...s, step: 'targetsSelected' };
+      if (s.step !== 'cardSelected' || !s.selectedCard) return s;
+      const card = s.selectedCard;
+      if ((card.target_type_enum === 'enemy' || card.target_type_enum === 'ally' || card.target_type_enum === 'self') && card.target_count_max > 0) {
+        return { ...s, step: 'characterTargetsSelected' };
+      } else if (card.target_type_enum === 'card' && card.target_count_max > 0) {
+        return { ...s, step: 'cardTargetsSelected' };
       }
       return { ...s, step: 'confirming' };
     });
@@ -68,14 +89,26 @@ export function useCardStateMachine(): CardPlayMachineAPI {
 
   const confirmPlay = () => {
     setState(s => {
-      if ((s.step !== 'targetsSelected' && s.step !== 'confirming') || !s.selectedCardId) return s;
-      if (s.selectedCardRequiresTargets && s.selectedTargetIds.length === 0 && s.maxTargets > 0) {
-        return s; 
+      if (!s.selectedCard || (s.step !== 'characterTargetsSelected' && s.step !== 'cardTargetsSelected' && s.step !== 'confirming')) {
+        return s;
+      }
+      const card = s.selectedCard;
+      let meetsMinTargets = true;
+      if ((card.target_type_enum === 'enemy' || card.target_type_enum === 'ally' || card.target_type_enum === 'self') && card.target_count_min > 0) {
+        if (s.selectedCharacterTargetIds.length < card.target_count_min) meetsMinTargets = false;
+      } else if (card.target_type_enum === 'card' && card.target_count_min > 0) {
+        if (s.selectedCardTargetIds.length < card.target_count_min) meetsMinTargets = false;
+      }
+
+      if (!meetsMinTargets) {
+        console.error("Minimum target count not met.");
+        return s;
       }
 
       performAction('declare_action', {
-        card_id: s.selectedCardId,
-        target_character_ids: s.selectedTargetIds,
+        card_id: card.id,
+        target_character_ids: s.selectedCharacterTargetIds,
+        target_card_ids: s.selectedCardTargetIds,
       });
       return initialState;
     });

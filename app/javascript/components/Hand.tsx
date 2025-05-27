@@ -2,16 +2,19 @@ import React from 'react';
 import Card from './Card';
 import HiddenCard from './HiddenCard';
 import type { CardData } from '../store';
+import type { CardPlayMachineState } from '../hooks/useCardStateMachine';
 
 interface HandProps {
   cards: CardData[] | undefined;
   cardCount: number;
   revealed: boolean;
-  onCardClick?: (cardId: string) => void;
+  onCardClick?: (cardId: string, card: CardData) => void;
+  canAffordCard?: (card: CardData) => boolean;
+  cardPlayMachineState: CardPlayMachineState;
   className?: string;
 }
 
-const Hand: React.FC<HandProps> = ({ cards, cardCount, revealed, onCardClick, className }) => {
+const Hand: React.FC<HandProps> = ({ cards, cardCount, revealed, onCardClick, canAffordCard, cardPlayMachineState, className }) => {
   return (
     <div
       style={{
@@ -32,6 +35,8 @@ const Hand: React.FC<HandProps> = ({ cards, cardCount, revealed, onCardClick, cl
             key={card.id}
             cardData={card}
             onClick={onCardClick}
+            isPlayable={onCardClick && canAffordCard ? canAffordCard(card) : undefined}
+            isSelected={cardPlayMachineState.selectedCard?.id === card.id}
           />
         ))
       ) : (

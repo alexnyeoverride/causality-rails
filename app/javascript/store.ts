@@ -3,9 +3,6 @@ import type { Subscription } from '@rails/actioncable';
 
 export interface CardData {
   id: string;
-  owner_character_id: string;
-  location: 'deck' | 'hand' | 'discard' | 'table';
-  position: number;
   name: string;
   description: string;
   resolution_timing: 'before' | 'after';
@@ -18,15 +15,17 @@ export interface CardData {
 
 export interface ActionData {
   id: string;
-  game_id: string;
   card_id: string;
   source_id: string;
+  source_name: string;
   trigger_id: string | null;
-  phase: 'declared' | 'reacted_to' | 'started' | 'resolved' | 'failed';
+  phase: 'declared' | 'reacted_to' | 'resolved' | 'failed';
   resolution_timing: 'before' | 'after' | null;
   is_free: boolean;
+  max_tick_count: number;
   target_character_ids: string[];
-  card: CardData;
+  target_card_ids: string[];
+  card: CardData; 
 }
 
 export interface CharacterInGameState {
@@ -36,8 +35,8 @@ export interface CharacterInGameState {
   actions_remaining: number;
   reactions_remaining: number;
   hand_card_count: number;
-  hand_cards?: CardData[];
-  deck_count: number;
+  hand_cards?: CardData[]; 
+  deck_card_count: number;
   discard_pile_card_count: number;
   is_current_player: boolean;
   is_alive: boolean;
@@ -48,7 +47,7 @@ export interface GameState {
   current_character_id: string | null;
   characters: CharacterInGameState[];
   active_actions: ActionData[];
-  cards_on_table: CardData[];
+  cards_on_table: CardData[]; 
   last_event: string | null;
   is_over: boolean;
 }
@@ -66,7 +65,7 @@ export interface StoreState {
   setSubscription: (subscription: Subscription | null) => void;
   setConnected: (status: boolean) => void;
   setGameDetails: (details: { gameId: string; characterId: string; playerSecret: string }) => void;
-  setGameState: (gameState: GameState) => void;
+  setGameState: (newGameState: GameState) => void;
   setError: (error: string | null) => void;
   setLastMessage: (message: string | null) => void;
   resetConnection: () => void;
@@ -90,24 +89,31 @@ const useGameStore = create<StoreState>((set, get) => ({
     characterId: details.characterId,
     playerSecret: details.playerSecret,
   }),
-  setGameState: (gameState) => {
+  setGameState: (newGameState) => {
     const currentCharacterId = get().characterId;
-    const updatedCharacters = gameState.characters.map(char => {
+    const updatedCharacters = newGameState.characters.map(char => {
       if (char.id === currentCharacterId && char.hand_cards) {
         return char;
       }
       const { hand_cards, ...rest } = char;
-      return { ...rest, hand_card_count: char.hand_card_count };
+      return { ...rest, hand_cards: char.id === currentCharacterId ? hand_cards : [] };
     });
 
-    const enrichedActions = gameState.active_actions?.map(action => {
-        const actionCard = gameState.cards_on_table?.find(card => card.id === action.card_id) ||
-                             gameState.characters.flatMap(c => c.hand_cards || []).find(card => card.id === action.card_id) ||
-                             gameState.characters.flatMap(c => c.discard_pile || []).find(card => card.id === action.card_id);
-        return { ...action, card: actionCard };
-    }) || [];
+    const processedActions = newGameState.active_actions || [];
+    
+    const cards_on_table_from_actions = processedActions
+      .map(action => action.card)
+      .filter((card): card is CardData => card !== null && card !== undefined);
 
-    set({ gameState: { ...gameState, characters: updatedCharacters, active_actions: enrichedActions }, error: null });
+    set({ 
+      gameState: { 
+        ...newGameState, 
+        characters: updatedCharacters, 
+        active_actions: processedActions,
+        cards_on_table: cards_on_table_from_actions
+      }, 
+      error: null 
+    });
   },
   setError: (error) => set({ error }),
   setLastMessage: (message) => set({ lastMessage: message }),

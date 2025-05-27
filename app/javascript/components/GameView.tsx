@@ -3,16 +3,18 @@ import useGameStore from '../store';
 import PlayerArea from './PlayerArea';
 import PlayArea from './PlayArea';
 import GameInfo from './GameInfo';
+import { useCardStateMachine } from '../hooks/useCardStateMachine';
 
 const GameView: React.FC = () => {
   const { gameState, characterId, isConnected } = useGameStore();
+  const cardPlayMachine = useCardStateMachine();
 
   if (!isConnected) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         <h2>Connecting to Game...</h2>
         <p>Please ensure you have joined or created a game.</p>
-        <GameInfo />
+        <GameInfo cardPlayMachine={cardPlayMachine} />
       </div>
     );
   }
@@ -21,34 +23,47 @@ const GameView: React.FC = () => {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         <h2>Loading game state...</h2>
-        <GameInfo />
+        <GameInfo cardPlayMachine={cardPlayMachine} />
       </div>
     );
   }
 
   const currentPlayer = gameState.characters.find(c => c.id === characterId);
   const opponents = gameState.characters.filter(c => c.id !== characterId);
+  const isCurrentTurnPlayer = gameState.current_character_id === characterId;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '10px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-around', flexShrink: 0 }}>
         {opponents.map(op => (
-          <PlayerArea key={op.id} player={op} isCurrentPlayer={false} />
+          <PlayerArea 
+            key={op.id} 
+            player={op} 
+            isCurrentTurnPlayer={gameState.current_character_id === op.id} 
+            isSelf={false}
+            cardPlayMachine={cardPlayMachine}
+          />
         ))}
       </div>
 
       <PlayArea
-        activeActions={gameState.active_actions || []}
-        cardsOnTable={gameState.cards_on_table || []}
         className="play-area"
         style={{ flexGrow: 1, margin: '10px 0' }}
+        cardPlayMachine={cardPlayMachine}
       />
 
       {currentPlayer && (
-        <PlayerArea player={currentPlayer} isCurrentPlayer={true} className="current-player-area" style={{ flexShrink: 0 }} />
+        <PlayerArea 
+          player={currentPlayer} 
+          isCurrentTurnPlayer={isCurrentTurnPlayer} 
+          isSelf={true} 
+          className="current-player-area" 
+          style={{ flexShrink: 0 }} 
+          cardPlayMachine={cardPlayMachine}
+        />
       )}
 
-      <GameInfo style={{ flexShrink: 0, marginTop: '10px' }} />
+      <GameInfo style={{ flexShrink: 0, marginTop: '10px' }} cardPlayMachine={cardPlayMachine} />
     </div>
   );
 };

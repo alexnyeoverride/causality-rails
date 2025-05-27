@@ -1,17 +1,15 @@
 import React from 'react';
-import Card from './Card';
-import type { CardData } from '../store';
 
 interface DiscardPileProps {
-  numCards: number;
+  cardCount: number;
+  onClick?: () => void;
   className?: string;
 }
 
-const DiscardPile: React.FC<DiscardPileProps> = ({ numCards, className }) => {
-  const topCard = cards.length > 0 ? cards[cards.length - 1] : null;
-
+const DiscardPile: React.FC<DiscardPileProps> = ({ cardCount, onClick, className }) => {
   return (
     <div
+      onClick={onClick}
       style={{
         border: '1px solid orange',
         padding: '10px',
@@ -27,11 +25,7 @@ const DiscardPile: React.FC<DiscardPileProps> = ({ numCards, className }) => {
       className={className}
     >
       <h4>Discard Pile</h4>
-      <p>{numCards} cards</p>
-      {topCard && (
-        <div style={{ marginTop: '10px', fontSize: '0.8em', opacity: 0.7 }}>
-        </div>
-      )}
+      <p>{cardCount} cards</p>
     </div>
   );
 };
