@@ -230,7 +230,7 @@ RSpec.describe GameChannel, type: :channel do
     it "transmits an error if card is not in hand" do
       subscription.connection.instance_variable_set(:@transmissions, [])
       original_card_location = @card_to_play.location
-      @card_to_play.update!(location: 'deck')
+      @card_to_play.update!(location: 'deck', position: character.deck.cards.count)
       character.reload
 
       expect {
@@ -241,8 +241,6 @@ RSpec.describe GameChannel, type: :channel do
         type: "error",
         message: "Failed to declare action: Card not in player's hand."
       )
-
-      @card_to_play.update!(location: original_card_location)
     end
 
     it "transmits an error if card_id is missing" do

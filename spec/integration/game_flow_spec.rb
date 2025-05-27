@@ -155,9 +155,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       end
 
       it 'advances trigger phase to "reacted_to" if non-reacting characters are dead' do
-        char_dead = game.characters.create!(name: 'Dead Dave', health: 100, actions_remaining: 0, reactions_remaining: 0)
-        char_dead.cards.create!(template: pass_template, location: 'hand', position: 0)
-        char_dead.update!(health: 0)
+        char1.update!(health: 0)
 
         expect(trigger_action.reload.phase).to eq('declared')
         game.declare_action(source_character_id: char2.id, card_id: char2_reaction_card.id, trigger_action_id: trigger_action.id)
@@ -224,6 +222,302 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
       expect(game.is_over?).to be true
       char3.update!(health: 0)
       expect(game.is_over?).to be true
+    end
+  end
+
+  describe 'Multi-Layer Reaction Tree and Initiative' do
+    def declare_and_check(source:, expected_trigger:, expected_trigger_phase:, expected_remaining_actions:, expected_remaining_reactions:, expected_next_char:, is_skip:)
+      template = is_skip ? pass_template : reaction_template
+      card = source.cards.create!(template: template, location: 'hand', position: source.cards.count)
+      expect(game.causality.get_next_trigger).to eq expected_trigger
+      action = game.declare_action(source_character_id: source.id, card_id: card.id, trigger_action_id: expected_trigger)
+      expect(action).to be_persisted
+      expected_trigger&.reload
+      expect(expected_trigger&.phase).to eq expected_trigger_phase
+      expect(source.reload.actions_remaining).to eq expected_remaining_actions
+      expect(source.reload.reactions_remaining).to eq expected_remaining_reactions
+      expect(game.reload.current_character).to eq expected_next_char
+      action
+    end
+
+    context "When the initial actor has 1 action point remaining" do
+      before do
+        char1.update!(actions_remaining: 1, reactions_remaining: 2)
+        char2.update!(actions_remaining: 2, reactions_remaining: 2)
+        char3.update!(actions_remaining: 2, reactions_remaining: 2)
+        game.update!(current_character: char1)
+      end
+
+      it 'processes the full tree and sets initiative correctly' do
+        # layer 0
+	a1 = declare_and_check(
+          source: char1,
+          expected_trigger: nil,
+          expected_trigger_phase: nil,
+          expected_remaining_actions: 0,
+          expected_remaining_reactions: 2,
+          expected_next_char: char2,
+          is_skip: false
+        )
+
+        # layer 1, row a1
+        r1_a1 = declare_and_check(
+          source: char2,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char3,
+          is_skip: false
+        )
+        r2_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: false
+        )
+        r3_a1 = declare_and_check(
+          source: char1,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 0,
+          expected_remaining_reactions: 1,
+          expected_next_char: char2,
+          is_skip: false
+        )
+
+        # layer 2, row r1_a1
+        r1_r1_a1 = declare_and_check(
+          source: char2,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char3,
+          is_skip: true
+        )
+        r2_r1_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: true
+        )
+        r3_r1_a1 = declare_and_check(
+          source: char1,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 0,
+          expected_remaining_reactions: 0,
+          expected_next_char: char2,
+          is_skip: false
+        )
+
+        # layer 2, row r2_a1
+        r1_r2_a1 = declare_and_check(
+          source: char2,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 0,
+          expected_next_char: char3,
+          is_skip: false
+        )
+        r2_r2_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: true
+        )
+        # char 1 is out of reactions
+
+        # layer 2, row r3_a1
+	# char2 is out of reactions
+        r1_r3_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: true
+        )
+        # char1 is out of reactions
+
+        # layer 3, row r1_r1_a1
+        # passes are not reactable to
+
+        # layer 3, row r2_r1_a1
+        # passes are not reactable to
+
+        # layer 3, row r3_r1_a1
+        # char2 is out of actions
+        r1_r3_r3_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 0,
+          expected_next_char: char1,
+          is_skip: false
+        )
+        # char1 is out of reactions
+
+        # the full tree should now resolve
+        expect(game.causality.get_next_trigger).to be_nil
+        expect(Action.all.all? {|a| a.phase == 'resolved' }).to eq true
+
+        # because char1 has no more action points, initiative goes to char2
+        expect(game.reload.current_character).to eq(char2)
+      end
+    end
+
+    context "When the initial actor has 2 action points remaining" do
+      before do
+        char1.update!(actions_remaining: 2, reactions_remaining: 2)
+        char2.update!(actions_remaining: 2, reactions_remaining: 2)
+        char3.update!(actions_remaining: 2, reactions_remaining: 2)
+        game.update!(current_character: char1)
+      end
+
+      it 'processes the full tree and sets initiative correctly' do
+        # layer 0
+	a1 = declare_and_check(
+          source: char1,
+          expected_trigger: nil,
+          expected_trigger_phase: nil,
+          expected_remaining_actions: 0,
+          expected_remaining_reactions: 2,
+          expected_next_char: char2,
+          is_skip: false
+        )
+
+        # layer 1, row a1
+        r1_a1 = declare_and_check(
+          source: char2,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char3,
+          is_skip: false
+        )
+        r2_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: false
+        )
+        r3_a1 = declare_and_check(
+          source: char1,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 0,
+          expected_remaining_reactions: 1,
+          expected_next_char: char2,
+          is_skip: false
+        )
+
+        # layer 2, row r1_a1
+        r1_r1_a1 = declare_and_check(
+          source: char2,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char3,
+          is_skip: true
+        )
+        r2_r1_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: true
+        )
+        r3_r1_a1 = declare_and_check(
+          source: char1,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 0,
+          expected_remaining_reactions: 0,
+          expected_next_char: char2,
+          is_skip: false
+        )
+
+        # layer 2, row r2_a1
+        r1_r2_a1 = declare_and_check(
+          source: char2,
+          expected_trigger: a1,
+          expected_trigger_phase: 'declared',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 0,
+          expected_next_char: char3,
+          is_skip: false
+        )
+        r2_r2_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: true
+        )
+        # char 1 is out of reactions
+
+        # layer 2, row r3_a1
+	# char2 is out of reactions
+        r1_r3_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 1,
+          expected_next_char: char1,
+          is_skip: true
+        )
+        # char1 is out of reactions
+
+        # layer 3, row r1_r1_a1
+        # passes are not reactable to
+
+        # layer 3, row r2_r1_a1
+        # passes are not reactable to
+
+        # layer 3, row r3_r1_a1
+        # char2 is out of actions
+        r1_r3_r3_a1 = declare_and_check(
+          source: char3,
+          expected_trigger: a1,
+          expected_trigger_phase: 'reacted_to',
+          expected_remaining_actions: 2,
+          expected_remaining_reactions: 0,
+          expected_next_char: char1,
+          is_skip: false
+        )
+        # char1 is out of reactions
+
+        # the full tree should now resolve
+        expect(game.causality.get_next_trigger).to be_nil
+        expect(Action.all.all? {|a| a.phase == 'resolved' }).to eq true
+
+        # because char1 has a remaining action point, initiative stays with char1
+        expect(game.reload.current_character).to eq(char1)
+      end
     end
   end
 end

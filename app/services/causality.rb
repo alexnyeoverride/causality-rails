@@ -9,7 +9,7 @@ class Causality
     action_to_save.save
 
     if action_to_save.persisted?
-      check_and_advance_trigger_phase(action_to_save.trigger_id) if action_to_save.trigger_id.present?
+      check_and_advance_trigger_phase(action_to_save.trigger) if action_to_save.trigger_id.present?
     end
     action_to_save
   end
@@ -126,13 +126,10 @@ class Causality
 
   private
 
-  def check_and_advance_trigger_phase(trigger_action_id)
-    trigger_action = game.actions.find_by(id: trigger_action_id)
-    return unless trigger_action && trigger_action.phase.to_s == 'declared'
-
+  def check_and_advance_trigger_phase(trigger_action)
     potential_reactors = game.characters.alive.to_a
 
-    responses_to_trigger = game.actions.where(trigger_id: trigger_action_id)
+    responses_to_trigger = game.actions.where(trigger_id: trigger_action)
     responding_character_ids = responses_to_trigger.pluck(:source_id).uniq
 
     all_potential_reactors_responded = potential_reactors.all? do |character|
