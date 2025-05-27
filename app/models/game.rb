@@ -174,7 +174,7 @@ class Game < ApplicationRecord
       end
     end
 
-    # TODO: restore `last_action_initiative`
+    # TODO: restore `last_action_initiative` if the character still has actions left.
   end
 
   def is_over?
