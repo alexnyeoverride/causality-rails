@@ -56,6 +56,7 @@ class Game < ApplicationRecord
   end
 
   def declare_action(source_character_id:, card_id:, target_character_ids: [], target_card_ids: [], trigger_action_id: nil)
+    # TODO: stash the `last_action_initiative` character here if action is not a reaction.
     action_to_process = Action.new(game: self)
 
     source_character = self.characters.find_by(id: source_character_id)
@@ -172,6 +173,8 @@ class Game < ApplicationRecord
         causality.fail_recursively!(tickable_action.id)
       end
     end
+
+    # TODO: restore `last_action_initiative`
   end
 
   def is_over?
