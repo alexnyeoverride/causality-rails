@@ -394,7 +394,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
           source: char1,
           expected_trigger: nil,
           expected_trigger_phase: nil,
-          expected_remaining_actions: 0,
+          expected_remaining_actions: 1,
           expected_remaining_reactions: 2,
           expected_next_char: char2,
           is_skip: false
@@ -423,7 +423,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
           source: char1,
           expected_trigger: a1,
           expected_trigger_phase: 'reacted_to',
-          expected_remaining_actions: 0,
+          expected_remaining_actions: 1,
           expected_remaining_reactions: 1,
           expected_next_char: char2,
           is_skip: false
@@ -452,7 +452,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
           source: char1,
           expected_trigger: a1,
           expected_trigger_phase: 'reacted_to',
-          expected_remaining_actions: 0,
+          expected_remaining_actions: 1,
           expected_remaining_reactions: 0,
           expected_next_char: char2,
           is_skip: false
