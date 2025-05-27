@@ -27,11 +27,9 @@ module BehaviorRegistry
       trigger_action.character_target_ids.include?(action.source_id)
     },
     'declarable_if_self_health_below_percentage' => ->(game, action) {
-      health_percentage_threshold = action.card.template.read_attribute_before_type_cast(:target_count_min) || 25
-      return false unless action.source_id && health_percentage_threshold.is_a?(Numeric)
+      health_percentage_threshold = action.card.template.target_count_min || 25
       source_char = game.characters.find_by(id: action.source_id)
-      return false unless source_char
-      (source_char.health.to_f / 100.0) * 100 < health_percentage_threshold
+      source_char.health < health_percentage_threshold
     },
     'declarable_if_trigger_is_card_name' => ->(game, action) {
       expected_card_name = action.card.template.target_condition_key
@@ -47,8 +45,7 @@ module BehaviorRegistry
       !['resolved', 'failed'].include?(trigger_action.phase.to_s)
     },
     'declarable_if_trigger_is_after_timing' => ->(game, action) {
-      return false unless action.trigger_id
-      trigger_action = game.actions.find_by(id: action.trigger_id)
+      trigger_action = action.trigger
       return false unless trigger_action
       trigger_action.resolution_timing.to_s == 'after'
     },
@@ -67,7 +64,10 @@ module BehaviorRegistry
 
     'deal_damage_to_targets_from_max_tick_count' => ->(game, action) {
       damage_amount = action.max_tick_count > 0 ? action.max_tick_count : 1
-      action.character_targets.each do |target_character|
+
+      fresh_action = Action.includes(:character_targets).find(action.id)
+
+      fresh_action.character_targets.each do |target_character|
         if target_character.alive?
           new_health = target_character.health - damage_amount
           target_character.update!(health: [new_health, 0].max)
@@ -86,7 +86,8 @@ module BehaviorRegistry
       return unless trigger && trigger.source && trigger.card
       card_to_return = trigger.card
       owner = trigger.source
-      # TODO: use transfer_card_to_location helper for this
+      game.causality.fail_recursively!(action.trigger.id)
+      # TODO use the card manager helper for transfering location
       max_pos = owner.cards.where(location: 'hand').maximum(:position) || -1
       new_pos = (max_pos || -1) + 1
       card_to_return.update!(location: 'hand', position: new_pos)
@@ -103,7 +104,7 @@ module BehaviorRegistry
     },
     'redirect_trigger_action_to_its_source' => ->(game, action) {
       trigger = action.trigger
-      return unless trigger && trigger.source
+      return unless trigger
       trigger.action_character_targets.destroy_all
       ActionCharacterTarget.create!(action: trigger, target_character: trigger.source)
     },
