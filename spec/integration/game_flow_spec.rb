@@ -509,15 +509,89 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
           expected_next_char: char1,
           is_skip: false
         )
-        # char1 is out of reactions
 
-        # the full tree should now resolve
         expect(game.causality.get_next_trigger).to be_nil
         expect(Action.all.all? {|a| a.phase == 'resolved' }).to eq true
 
         # because char1 has a remaining action point, initiative stays with char1
         expect(game.reload.current_character).to eq(char1)
       end
+    end
+  end
+
+  context 'with a complex chain of before and after reactions' do
+    let!(:t1_template) { Template.create!(name: 'T1_BaseAction', description: 'Base', resolution_timing: 'before', declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
+    let!(:t2_template) { Template.create!(name: 'T2_ReactTo1_After', description: 'Reacts to T1, After', resolution_timing: 'after',  declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
+    let!(:t3_template) { Template.create!(name: 'T3_ReactTo1_Before', description: 'Reacts to T1, Before', resolution_timing: 'before', declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
+    let!(:t4_template) { Template.create!(name: 'T4_ReactTo2_After', description: 'Reacts to T2, After', resolution_timing: 'after',  declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
+    let!(:t5_template) { Template.create!(name: 'T5_ReactTo2_After_Other', description: 'Reacts to T2, After (other)', resolution_timing: 'after',  declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
+    let!(:t6_template) { Template.create!(name: 'T6_ReactTo5_Before', description: 'Reacts to T5, Before', resolution_timing: 'before', declarability_key: 'default_declarability', tick_condition_key: 'default_tick_condition', tick_effect_key: 'default_tick_effect', max_tick_count: 1) }
+
+    before(:each) do
+      char1.cards.delete_all
+      char2.cards.delete_all
+      char3.cards.delete_all
+    end
+
+    let!(:c1_card_for_a1) { char1.cards.create!(template: t1_template, location: 'hand', position: 0) }
+    let!(:c2_card_for_a2) { char2.cards.create!(template: t2_template, location: 'hand', position: 0) }
+    let!(:c3_card_for_a3) { char3.cards.create!(template: t3_template, location: 'hand', position: 0) }
+    let!(:c1_card_for_a4) { char1.cards.create!(template: t4_template, location: 'hand', position: 1) }
+    let!(:c2_card_for_a5) { char2.cards.create!(template: t5_template, location: 'hand', position: 1) }
+    let!(:c3_card_for_a6) { char3.cards.create!(template: t6_template, location: 'hand', position: 1) }
+
+    it 'resolves actions in the correct order: a3, a1, a2, a4, a6, a5' do
+      resolved_order_tracker = []
+
+      allow(game).to receive(:process_actions!)
+
+      game.update!(current_character: char1)
+      a1 = game.declare_action(source_character_id: char1.id, card_id: c1_card_for_a1.id)
+      expect(a1.errors).to be_empty
+
+      game.update!(current_character: char3)
+      a3 = game.declare_action(source_character_id: char3.id, card_id: c3_card_for_a3.id, trigger_action_id: a1.id)
+      expect(a3.errors).to be_empty
+
+      game.update!(current_character: char2)
+      a2 = game.declare_action(source_character_id: char2.id, card_id: c2_card_for_a2.id, trigger_action_id: a1.id)
+      expect(a2.errors).to be_empty
+
+      game.update!(current_character: char1)
+      a4 = game.declare_action(source_character_id: char1.id, card_id: c1_card_for_a4.id, trigger_action_id: a2.id)
+      expect(a4.errors).to be_empty
+
+      game.update!(current_character: char2)
+      a5 = game.declare_action(source_character_id: char2.id, card_id: c2_card_for_a5.id, trigger_action_id: a2.id)
+      expect(a5.errors).to be_empty
+
+      game.update!(current_character: char3)
+      a6 = game.declare_action(source_character_id: char3.id, card_id: c3_card_for_a6.id, trigger_action_id: a5.id)
+      expect(a6.errors).to be_empty
+
+      allow(game).to receive(:process_actions!).and_call_original
+
+      actions_in_chain = [a1, a2, a3, a4, a5, a6]
+      actions_in_chain.each do |action|
+        action.update_column(:phase, 'reacted_to')
+        allow_any_instance_of(Action).to receive(:on_tick!) do |action|
+          resolved_order_tracker << action.card.template.name.split('_').first.downcase.to_sym
+        end
+      end
+
+      allow_any_instance_of(Action).to receive(:can_tick?) do |action_instance|
+        if action_instance.trigger_id.present? && action_instance.resolution_timing.to_s == 'after'
+          trigger = Action.find_by(id: action_instance.trigger_id)
+          trigger&.phase.to_s == 'resolved'
+        else
+          true
+        end
+      end
+
+      game.update!(current_character: char1)
+      game.process_actions!
+
+      expect(resolved_order_tracker).to eq([:t3, :t1, :t2, :t4, :t6, :t5])
     end
   end
 end
