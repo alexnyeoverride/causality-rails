@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Card from './Card';
 import type { ActionData, CardData } from '../store';
 
@@ -14,6 +14,14 @@ const PlayArea: React.FC<PlayAreaProps> = ({ activeActions = [], cardsOnTable = 
   const renderAction = (action: ActionData, allActions: ActionData[], level: number = 0) => {
     const reactions = allActions.filter(a => a.trigger_id === action.id);
     const cardForAction = action.card;
+
+    useEffect(() => {
+      // TODO: animate appearance/disappearance/phase changes of activeActionsFromStore
+    }, [activeActionsFromStore]);
+
+    useEffect(() => {
+      // TODO: animate cardsOnTableFromStore changes if needed (e.g. cards played directly to table not via actions)
+    }, [cardsOnTableFromStore]);
 
     return (
       <div key={action.id} style={{ marginLeft: `${level * 30}px`, marginBottom: '10px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>

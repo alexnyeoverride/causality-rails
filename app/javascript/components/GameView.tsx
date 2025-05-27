@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import useGameStore from '../store';
 import PlayerArea from './PlayerArea';
 import PlayArea from './PlayArea';
@@ -8,6 +8,14 @@ import { useCardStateMachine } from '../hooks/useCardStateMachine';
 const GameView: React.FC = () => {
   const { gameState, characterId, isConnected } = useGameStore();
   const cardPlayMachine = useCardStateMachine();
+
+  useEffect(() => {
+    // TODO: animate gameState.current_character_id changes (turn transitions)
+  }, [gameState?.current_character_id]);
+
+  useEffect(() => {
+    // TODO: animate gameState.is_over changes (game over sequence)
+  }, [gameState?.is_over]);
 
   if (!isConnected) {
     return (

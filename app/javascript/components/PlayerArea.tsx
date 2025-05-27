@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import Hand from './Hand';
 import Deck from './Deck';
 import DiscardPile from './DiscardPile';
@@ -17,6 +17,30 @@ interface PlayerAreaProps {
 
 const PlayerArea: React.FC<PlayerAreaProps> = ({ player, isCurrentTurnPlayer, isSelf, className, style, cardPlayMachine }) => {
   const { selectCard: selectMachineCard, toggleTarget: toggleMachineTarget, state: cardMachineState } = cardPlayMachine;
+
+  useEffect(() => {
+    // TODO: animate player.health changes
+  }, [player.health]);
+
+  useEffect(() => {
+    // TODO: animate player.actions_remaining changes
+  }, [player.actions_remaining]);
+
+  useEffect(() => {
+    // TODO: animate player.reactions_remaining changes
+  }, [player.reactions_remaining]);
+
+  useEffect(() => {
+    // TODO: animate player.hand_card_count changes (e.g., area pulse)
+  }, [player.hand_card_count]);
+
+  useEffect(() => {
+    // TODO: animate player.deck_card_count changes (e.g., area pulse)
+  }, [player.deck_card_count]);
+
+  useEffect(() => {
+    // TODO: animate player.discard_pile_card_count changes (e.g., area pulse)
+  }, [player.discard_pile_card_count]);
 
   const handleCardClickInHand = (cardId: string, card: CardData) => {
     if (isSelf && isCurrentTurnPlayer && cardMachineState.step === 'idle') {

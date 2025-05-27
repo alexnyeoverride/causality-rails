@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Card from './Card';
 import HiddenCard from './HiddenCard';
 import type { CardData } from '../store';
@@ -15,6 +15,12 @@ interface HandProps {
 }
 
 const Hand: React.FC<HandProps> = ({ cards, cardCount, revealed, onCardClick, canAffordCard, cardPlayMachineState, className }) => {
+  useEffect(() => {
+    // TODO: animate changes to the list of cards (cards appearing/disappearing)
+    // This is more complex for list animations; consider libraries like Framer Motion's AnimatePresence
+    // Also the animation needs to coordinate between multiple containers, for drawing *from* a deck *into* a hand.
+  }, [cards, cardCount]); // Watching both `cards` array (if revealed) and `cardCount`
+
   return (
     <div
       style={{

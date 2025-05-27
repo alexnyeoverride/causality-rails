@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface DeckProps {
   cardCount: number;
@@ -7,6 +7,10 @@ interface DeckProps {
 }
 
 const Deck: React.FC<DeckProps> = ({ cardCount, onClick, className }) => {
+  useEffect(() => {
+    // TODO: animate cardCount changes (e.g., visual indication of drawing)
+  }, [cardCount]);
+
   return (
     <div
       onClick={onClick}

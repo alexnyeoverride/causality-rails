@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface DiscardPileProps {
   cardCount: number;
@@ -7,6 +7,10 @@ interface DiscardPileProps {
 }
 
 const DiscardPile: React.FC<DiscardPileProps> = ({ cardCount, onClick, className }) => {
+  useEffect(() => {
+    // TODO: animate cardCount changes (e.g., visual indication of discarding)
+  }, [cardCount]);
+
   return (
     <div
       onClick={onClick}
