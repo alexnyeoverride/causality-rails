@@ -100,25 +100,11 @@ module BehaviorRegistry
         action.source.update!(health: [0, action.source.health - source_damage].max)
       end
     },
-    'apply_anticipation_buff_to_source' => ->(game, action) {
-      # TODO: Implement actual buff application logic for anticipation.
-      # This might involve adding a temporary status to action.source character
-      # that modifies their next action or provides a defensive benefit.
-    },
     'redirect_trigger_action_to_its_source' => ->(game, action) {
       trigger = action.trigger
       return unless trigger && trigger.source
       trigger.action_character_targets.destroy_all
       ActionCharacterTarget.create!(action: trigger, target_character: trigger.source)
-    },
-    'apply_reactive_stance_buff_to_source' => ->(game, action) {
-      # TODO: Implement actual buff application logic for reactive stance.
-      # This could grant extra reactions, improve reaction cards, etc.
-    },
-    'apply_feedback_spines_aura' => ->(game, action) {
-      # TODO: Implement actual aura application for feedback spines.
-      # This likely involves adding a game-level or character-level persistent effect
-      # that triggers damage when the character is targeted or hit.
     },
     'change_trigger_timing_to_before' => ->(game, action) {
       trigger = action.trigger

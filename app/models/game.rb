@@ -145,10 +145,6 @@ class Game < ApplicationRecord
   end
 
   def process_actions!
-    # TODO: Consider how "enchantments" or "auras" might modify actions before they tick,
-    # or react to actions being processed. This might involve checking a game-level
-    # list of active global effects or character-specific persistent effects.
-
     while (tickable_action = causality.get_next_tickable) do
       tickable_action.on_tick!
 

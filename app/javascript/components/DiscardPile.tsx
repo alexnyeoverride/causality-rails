@@ -3,17 +3,15 @@ import Card from './Card';
 import type { CardData } from '../store';
 
 interface DiscardPileProps {
-  cards: CardData[];
-  onClick?: () => void;
+  numCards: number;
   className?: string;
 }
 
-const DiscardPile: React.FC<DiscardPileProps> = ({ cards, onClick, className }) => {
+const DiscardPile: React.FC<DiscardPileProps> = ({ numCards, className }) => {
   const topCard = cards.length > 0 ? cards[cards.length - 1] : null;
 
   return (
     <div
-      onClick={onClick}
       style={{
         border: '1px solid orange',
         padding: '10px',
@@ -29,10 +27,9 @@ const DiscardPile: React.FC<DiscardPileProps> = ({ cards, onClick, className }) 
       className={className}
     >
       <h4>Discard Pile</h4>
-      <p>{cards.length} cards</p>
+      <p>{numCards} cards</p>
       {topCard && (
         <div style={{ marginTop: '10px', fontSize: '0.8em', opacity: 0.7 }}>
-          Top: {topCard.name}
         </div>
       )}
     </div>

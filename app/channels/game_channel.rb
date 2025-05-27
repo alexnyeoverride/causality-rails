@@ -4,10 +4,8 @@ class GameChannel < ApplicationCable::Channel
   end
 
   def unsubscribed
-    if @current_character_id && @current_game_id
-      character = Character.find_by(id: @current_character_id)
-      game = Game.find_by(id: @current_game_id)
-    end
+    character = Character.find_by(id: @current_character_id) if @current_character_id
+    game = Game.find_by(id: @current_game_id) if @current_game_id
     stop_all_streams
   end
 
@@ -27,9 +25,9 @@ class GameChannel < ApplicationCable::Channel
 
       transmit({
         type: "joined",
-        game_id: @current_game_id,
-        player_secret: @current_character_id,
-        character_id: @current_character_id,
+        game_id: game.id,
+        player_secret: character.id, 
+        character_id: character.id,
         message: "Game created successfully. You are Character #{character.id} ('#{character.name}')."
       })
       broadcast_game_state(@current_game_id)
@@ -47,7 +45,10 @@ class GameChannel < ApplicationCable::Channel
       return
     end
 
-    if @current_game_id
+    if @current_game_id && @current_game_id == game.id && @current_character_id
+      rejoin_game({ "game_id" => game_id, "player_secret" => @current_character_id })
+      return
+    elsif @current_game_id
       transmit_error("You are already in a game (Game #{@current_game_id}). Leave it before joining another.")
       return
     end
@@ -60,6 +61,9 @@ class GameChannel < ApplicationCable::Channel
     ActiveRecord::Base.transaction do
       player_name = data.fetch("player_name", "Player #{SecureRandom.hex(2)}")
       character = game.characters.create!(name: player_name)
+      if game.characters.joins(:cards).distinct.count < game.characters.count || character.cards.empty?
+         deal_initial_cards_to_character(character) unless character.cards.any?
+      end
       character.reset_turn_resources!
 
       @current_game_id = game.id
@@ -69,9 +73,9 @@ class GameChannel < ApplicationCable::Channel
 
       transmit({
         type: "joined",
-        game_id: @current_game_id,
-        player_secret: @current_character_id,
-        character_id: @current_character_id,
+        game_id: game.id,
+        player_secret: character.id,
+        character_id: character.id,
         message: "Successfully joined Game #{game.id} as Character #{character.id} ('#{character.name}')."
       })
       broadcast_game_state(@current_game_id)
@@ -95,8 +99,8 @@ class GameChannel < ApplicationCable::Channel
 
       transmit({
         type: "rejoined",
-        game_id: @current_game_id,
-        character_id: @current_character_id,
+        game_id: game.id,
+        character_id: character.id,
         message: "Successfully rejoined Game #{game.id} as Character #{character.id} ('#{character.name}')."
       })
       broadcast_game_state(@current_game_id)
@@ -116,10 +120,10 @@ class GameChannel < ApplicationCable::Channel
       transmit_error("Current game not found. Please rejoin.")
       return
     end
-
+    
     card_id = data["card_id"]
-    target_character_ids = data.fetch("target_character_ids", [])
-    target_card_ids = data.fetch("target_card_ids", [])
+    target_character_ids = Array(data.fetch("target_character_ids", [])).reject(&:blank?)
+    target_card_ids = Array(data.fetch("target_card_ids", [])).reject(&:blank?)
     trigger_action_id = data["trigger_id"]
 
     unless card_id
@@ -128,9 +132,6 @@ class GameChannel < ApplicationCable::Channel
     end
 
     begin
-      # TODO: For "enchantments" or "auras" that trigger on declaration,
-      # this is a point where those effects could be checked and applied
-      # before or after the action is formally declared/saved.
       declared_action = game.declare_action(
         source_character_id: @current_character_id,
         card_id: card_id,
@@ -145,9 +146,10 @@ class GameChannel < ApplicationCable::Channel
       elsif declared_action.errors.any?
         transmit_error("Failed to declare action: #{declared_action.errors.full_messages.join(', ')}")
       else
-        transmit_error("Failed to declare action. Action was not persisted and had no errors.")
+        transmit_error("Failed to declare action. Action was not persisted and had no errors. This indicates a potential issue in the action declaration logic.")
       end
     rescue StandardError => e
+      Rails.logger.error "Declare Action Error: #{e.message}\n#{e.backtrace.join("\n")}"
       transmit_error("An unexpected error occurred while declaring action: #{e.message}")
     end
   end
@@ -161,8 +163,7 @@ class GameChannel < ApplicationCable::Channel
     game = Game.find_by(id: @current_game_id)
     character = Character.find_by(id: @current_character_id)
 
-    if game && character
-
+    if game && character && character.game_id == game.id
       stop_stream_from "game_#{@current_game_id}_character_#{@current_character_id}"
 
       old_game_id = @current_game_id
@@ -174,7 +175,7 @@ class GameChannel < ApplicationCable::Channel
       transmit({ type: "left_game", game_id: old_game_id, message: "You have left the game."})
       broadcast_game_state(old_game_id, "Player #{character_name_left} has left the game.")
     else
-      transmit_error("Error leaving game: Game or character not found.")
+      transmit_error("Error leaving game: Game or character not found, or character not in this game.")
       @current_game_id = nil
       @current_character_id = nil
     end
@@ -182,11 +183,66 @@ class GameChannel < ApplicationCable::Channel
 
   private
 
+  def serialize_card(card)
+    return nil unless card && card.template
+    {
+      id: card.id,
+      owner_character_id: card.owner_character_id,
+      location: card.location.to_s,
+      position: card.position,
+      name: card.template.name,
+      description: card.template.description,
+      resolution_timing: card.template.resolution_timing.to_s,
+      is_free: card.template.is_free,
+      target_type_enum: card.target_type_enum.to_s,
+      target_count_min: card.target_count_min,
+      target_count_max: card.target_count_max,
+      target_condition_key: card.target_condition_key
+    }
+  end
+  
+  def deal_initial_cards_to_character(character)
+    return unless character && character.cards.empty?
+    game = character.game
+    all_templates = Template.all.to_a
+    return if all_templates.empty?
+
+    cards_to_create = []
+    total_cards_for_character = Game::CARDS_PER_TEMPLATE_IN_DECK * all_templates.count
+    shuffle = (0...total_cards_for_character).to_a.shuffle
+    current_idx = 0
+
+    Game::CARDS_PER_TEMPLATE_IN_DECK.times do
+      all_templates.each do |template|
+        shuffled_position_overall = shuffle[current_idx]
+        location = shuffled_position_overall < Game::STARTING_HAND_SIZE ? :hand : :deck
+        position_in_location = location == :deck ? shuffled_position_overall - Game::STARTING_HAND_SIZE : shuffled_position_overall
+        
+        cards_to_create << {
+          owner_character_id: character.id,
+          template_id: template.id,
+          location: location.to_s,
+          position: position_in_location,
+          target_type_enum: template.target_type_enum,
+          target_count_min: template.target_count_min,
+          target_count_max: template.target_count_max,
+          target_condition_key: template.target_condition_key,
+          created_at: Time.current,
+          updated_at: Time.current
+        }
+        current_idx += 1
+      end
+    end
+    Card.insert_all(cards_to_create, unique_by: :id) if cards_to_create.any?
+    character.reload
+  end
+
   def broadcast_game_state(game_id, event_message = nil)
     game = Game.includes(
-      characters: [:cards => :template],
-      actions: [:card, :source, :action_character_targets, :action_card_targets, :trigger]
+      { characters: { cards: :template } },
+      { actions: [:source, :trigger, :action_character_targets, :action_card_targets, { card: :template }] }
     ).find_by(id: game_id)
+
     return unless game
 
     game.characters.each do |recipient_character|
@@ -194,49 +250,37 @@ class GameChannel < ApplicationCable::Channel
         id: game.id,
         current_character_id: game.current_character_id,
         characters: game.characters.map do |char_to_serialize|
-          char_data = {
+          serialized_char = {
             id: char_to_serialize.id,
             name: char_to_serialize.name,
             health: char_to_serialize.health,
             actions_remaining: char_to_serialize.actions_remaining,
             reactions_remaining: char_to_serialize.reactions_remaining,
             hand_card_count: char_to_serialize.hand.count,
+            hand_cards: (char_to_serialize.id == recipient_character.id) ? char_to_serialize.hand.cards.map { |card| serialize_card(card) } : [],
             deck_card_count: char_to_serialize.deck.count,
             discard_pile_card_count: char_to_serialize.discard_pile.count,
             is_current_player: game.current_character_id == char_to_serialize.id,
             is_alive: char_to_serialize.alive?
           }
-          if char_to_serialize.id == recipient_character.id
-            char_data[:hand_cards] = char_to_serialize.hand.cards.map do |card|
-              {
-                id: card.id,
-                name: card.template.name,
-                description: card.template.description,
-                resolution_timing: card.template.resolution_timing,
-                is_free: card.template.is_free,
-                target_type_enum: card.target_type_enum,
-                target_count_min: card.target_count_min,
-                target_count_max: card.target_count_max,
-                target_condition_key: card.target_condition_key
-              }
-            end
-          end
-          char_data
+          serialized_char
         end,
-        active_actions: game.actions.where(phase: ['declared', 'reacted_to', 'started']).order(id: :asc).map do |action|
+        active_actions: game.actions
+                           .where(phase: ['declared', 'reacted_to'])
+                           .order(id: :asc).map do |action|
           {
             id: action.id,
             card_id: action.card_id,
-            card_name: action.card&.name,
             source_id: action.source_id,
             source_name: action.source&.name,
-            phase: action.phase,
+            phase: action.phase.to_s,
             trigger_id: action.trigger_id,
-            resolution_timing: action.resolution_timing,
+            resolution_timing: action.resolution_timing&.to_s,
             is_free: action.is_free,
             max_tick_count: action.max_tick_count,
-            target_character_ids: action.action_character_targets.pluck(:target_character_id),
-            target_card_ids: action.action_card_targets.pluck(:target_card_id)
+            target_character_ids: action.action_character_targets.map(&:target_character_id),
+            target_card_ids: action.action_card_targets.map(&:target_card_id),
+            card: serialize_card(action.card)
           }
         end,
         is_over: game.is_over?,
@@ -254,4 +298,3 @@ class GameChannel < ApplicationCable::Channel
     transmit({ type: "error", message: message })
   end
 end
-

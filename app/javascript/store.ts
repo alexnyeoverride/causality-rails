@@ -10,6 +10,10 @@ export interface CardData {
   description: string;
   resolution_timing: 'before' | 'after';
   is_free: boolean;
+  target_type_enum: 'enemy' | 'ally' | 'self' | 'card' | 'next_draw';
+  target_count_min: number;
+  target_count_max: number;
+  target_condition_key: string | null;
 }
 
 export interface ActionData {
@@ -22,7 +26,7 @@ export interface ActionData {
   resolution_timing: 'before' | 'after' | null;
   is_free: boolean;
   target_character_ids: string[];
-  card?: CardData;
+  card: CardData;
 }
 
 export interface CharacterInGameState {
@@ -34,7 +38,9 @@ export interface CharacterInGameState {
   hand_card_count: number;
   hand_cards?: CardData[];
   deck_count: number;
-  discard_pile: CardData[];
+  discard_pile_card_count: number;
+  is_current_player: boolean;
+  is_alive: boolean;
 }
 
 export interface GameState {
@@ -44,6 +50,7 @@ export interface GameState {
   active_actions: ActionData[];
   cards_on_table: CardData[];
   last_event: string | null;
+  is_over: boolean;
 }
 
 export interface StoreState {
