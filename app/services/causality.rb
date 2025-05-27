@@ -125,7 +125,7 @@ class Causality
   end
 
   def check_and_advance_trigger_phase(trigger_action)
-    potential_reactors = game.characters.alive.to_a
+    potential_reactors = game.characters.alive.where('reactions_remaining > 0').to_a
 
     responses_to_trigger = game.actions.where(trigger_id: trigger_action)
     responding_character_ids = responses_to_trigger.pluck(:source_id).uniq
