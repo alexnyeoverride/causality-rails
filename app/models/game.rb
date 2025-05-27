@@ -69,8 +69,6 @@ class Game < ApplicationRecord
     end
     action_to_process.source = source_character
 
-    # TODO: validate source_character is current_character
-
     card_record = source_character.cards.find_by(id: card_id)
     unless card_record
       action_to_process.errors.add(:base, "Card not found for character.")
