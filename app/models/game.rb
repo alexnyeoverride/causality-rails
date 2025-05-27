@@ -16,8 +16,6 @@ class Game < ApplicationRecord
     @causality ||= Causality.new(self)
   end
 
-  # TODO: ensure this is called only after all characters have joined / been created.
-  # Otherwise only the creator will have a shuffled deck.  Or cards at all for that matter.
   def setup_new_game!
     return unless characters.any?
 
@@ -25,12 +23,6 @@ class Game < ApplicationRecord
       all_templates = Template.all.to_a
       return if all_templates.empty?
 
-      # Optimized to bulk create all cards for all characters in one query.
-      # This includes ensuring:
-      #  - characters have cards in hand and the remainder in their deck
-      #  - decks are shuffled
-      #  - each card has a unique position in its location
-      #  - positions start at 0 for each container
       total_cards_for_character = CARDS_PER_TEMPLATE_IN_DECK * all_templates.count
       cards_to_create = []
       characters.each do |character|
@@ -40,7 +32,6 @@ class Game < ApplicationRecord
           all_templates.each do |template|
             shuffled_position = shuffle[current_position]
             location = shuffled_position < STARTING_HAND_SIZE ? :hand : :deck
-            # Reset counting so positions start at 0 in the deck too.
             position = location == :deck ? shuffled_position - STARTING_HAND_SIZE : shuffled_position
             cards_to_create << {
               owner_character_id: character.id,
@@ -60,7 +51,7 @@ class Game < ApplicationRecord
       end
       Card.insert_all(cards_to_create, unique_by: :id)
 
-      self.update!(current_character_id: characters.order(:id).first.id)
+      self.update!(current_character_id: characters.order(:id).first.id) if self.current_character_id.nil? && characters.any?
     end
   end
 
@@ -91,7 +82,6 @@ class Game < ApplicationRecord
       }
     )
 
-    # TODO: do these belong as validations on `Action` itself?
     unless source_character.alive?
       action_to_process.errors.add(:base, "Source character is not alive.")
       return action_to_process
@@ -116,16 +106,12 @@ class Game < ApplicationRecord
       causality.add(action_to_save: action_to_process)
 
       if action_to_process.persisted?
-        max_pos_on_table = Card.where(owner_character_id: source_character.id, location: 'table').maximum(:position) || -1
-        new_pos_on_table = max_pos_on_table + 1
-        card_to_move = action_to_process.card
-        card_to_move.update!(location: 'table', position: new_pos_on_table)
-
-        spent_last_of_resource = source_character.spend_resource_for_action!(action_to_process)
-
-        initiative.advance!(is_reaction_phase: action_to_process.trigger_id)
-        # TODO: notify client of initiative advancement
+        source_character.card_manager.transfer_card_to_location!(card_record, :table)
+        source_character.spend_resource_for_action!(action_to_process)
+        initiative.advance!(is_reaction_phase: action_to_process.trigger_id.present?)
         self.reload
+      else
+        return action_to_process
       end
     end
 
@@ -157,24 +143,14 @@ class Game < ApplicationRecord
         should_resolve_due_to_completion = true
       end
 
-      if should_resolve_due_to_completion && tickable_action.phase != 'failed'
+      if should_resolve_due_to_completion && tickable_action.phase.to_s != 'failed'
         tickable_action.update(phase: :resolved)
-
-        # TODO: create reusable repositioning logic for arbitary container-to-container transfers, and put that in the bulk operations concern.
-        # `transfer(from: :table, to: :discard, for: action.source)` 
-        max_discard_pos = tickable_action.source.cards.where(location: 'discard').maximum(:position) || -1
-        new_position_in_discard = max_discard_pos + 1
-        tickable_action.card.update(
-          location: :discard,
-          position: new_position_in_discard
-        )
+        tickable_action.source.card_manager.transfer_card_to_location!(tickable_action.card, :discard)
       end
 
       if tickable_action.phase.to_s == 'failed'
-        failed_action_data = causality.fail_recursively!(tickable_action.id)
-        # TODO: notify client of card ids to animate as discarded
+        causality.fail_recursively!(tickable_action.id)
       end
-      # TODO: notify client of cards which were resolved and which were failed.  Also notify of any which ticked but did not finish.
     end
   end
 
@@ -182,4 +158,3 @@ class Game < ApplicationRecord
     self.characters.alive.count <= 1
   end
 end
-

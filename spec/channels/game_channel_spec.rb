@@ -311,24 +311,24 @@ RSpec.describe GameChannel, type: :channel do
     let!(:carol_discard_card) { char3.cards.create!(template: template2, location: 'discard', position: 0, target_type_enum: template2.target_type_enum, target_count_min: template2.target_count_min, target_count_max: template2.target_count_max, target_condition_key: template2.target_condition_key) }
 
     let!(:active_action_on_table) do
-      card_for_action = char1.cards.create!(template: template2, location: 'table', position: 0, target_type_enum: template2.target_type_enum, target_count_min: template2.target_count_min, target_count_max: template2.target_count_max, target_condition_key: template2.target_condition_key)
+      card_for_action = char1.hand.cards.first
       action = game.actions.create!(
         card: card_for_action,
         source: char1,
         phase: 'declared',
-        resolution_timing: template2.resolution_timing,
-        is_free: template2.is_free,
-        max_tick_count: template2.max_tick_count,
-        declarability_key: template2.declarability_key,
-        tick_condition_key: template2.tick_condition_key,
-        tick_effect_key: template2.tick_effect_key
+        resolution_timing: template1.resolution_timing,
+        is_free: template1.is_free,
+        max_tick_count: template1.max_tick_count,
+        declarability_key: template1.declarability_key,
+        tick_condition_key: template1.tick_condition_key,
+        tick_effect_key: template1.tick_effect_key
       )
       action.action_character_targets.create!(target_character: char3)
       action
     end
 
     let!(:resolved_action) do
-      card_for_resolved_action = char1.cards.create!(template: template1, location: 'discard', position: 10, target_type_enum: template1.target_type_enum, target_count_min: template1.target_count_min, target_count_max: template1.target_count_max, target_condition_key: template1.target_condition_key)
+      card_for_resolved_action = char1.hand.cards.first
       game.actions.create!(
         card: card_for_resolved_action,
         source: char1,
@@ -369,7 +369,7 @@ RSpec.describe GameChannel, type: :channel do
           reactions_remaining: 0,
           hand_card_count: 3,
           deck_card_count: 2,
-          discard_pile_card_count: 2,
+          discard_pile_card_count: 1,
           is_current_player: true,
           is_alive: true
         }
@@ -429,13 +429,13 @@ RSpec.describe GameChannel, type: :channel do
             source_name: "Alice",
             phase: "declared",
             trigger_id: nil,
-            resolution_timing: template2.resolution_timing.to_s,
-            is_free: template2.is_free,
-            max_tick_count: template2.max_tick_count,
+            resolution_timing: template1.resolution_timing.to_s,
+            is_free: template1.is_free,
+            max_tick_count: template1.max_tick_count,
             target_character_ids: [char3.id],
             card: hash_including(
                 id: active_action_on_table.card.id,
-                name: template2.name
+                name: template1.name
             )
           )
         ]

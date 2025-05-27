@@ -26,7 +26,7 @@ class GameChannel < ApplicationCable::Channel
       transmit({
         type: "joined",
         game_id: game.id,
-        player_secret: character.id, 
+        player_secret: character.id,
         character_id: character.id,
         message: "Game created successfully. You are Character #{character.id} ('#{character.name}')."
       })
@@ -62,7 +62,7 @@ class GameChannel < ApplicationCable::Channel
       player_name = data.fetch("player_name", "Player #{SecureRandom.hex(2)}")
       character = game.characters.create!(name: player_name)
       if game.characters.joins(:cards).distinct.count < game.characters.count || character.cards.empty?
-         deal_initial_cards_to_character(character) unless character.cards.any?
+         character.card_manager.deal_initial_cards! unless character.cards.any?
       end
       character.reset_turn_resources!
 
@@ -120,7 +120,7 @@ class GameChannel < ApplicationCable::Channel
       transmit_error("Current game not found. Please rejoin.")
       return
     end
-    
+
     card_id = data["card_id"]
     target_character_ids = Array(data.fetch("target_character_ids", [])).reject(&:blank?)
     target_card_ids = Array(data.fetch("target_card_ids", [])).reject(&:blank?)
@@ -196,43 +196,6 @@ class GameChannel < ApplicationCable::Channel
       target_count_max: card.target_count_max,
       target_condition_key: card.target_condition_key
     }
-  end
- 
-  # TODO: this absolutely is in the wrong place 
-  def deal_initial_cards_to_character(character)
-    return unless character && character.cards.empty?
-    game = character.game
-    all_templates = Template.all.to_a
-    return if all_templates.empty?
-
-    cards_to_create = []
-    total_cards_for_character = Game::CARDS_PER_TEMPLATE_IN_DECK * all_templates.count
-    shuffle = (0...total_cards_for_character).to_a.shuffle
-    current_idx = 0
-
-    Game::CARDS_PER_TEMPLATE_IN_DECK.times do
-      all_templates.each do |template|
-        shuffled_position_overall = shuffle[current_idx]
-        location = shuffled_position_overall < Game::STARTING_HAND_SIZE ? :hand : :deck
-        position_in_location = location == :deck ? shuffled_position_overall - Game::STARTING_HAND_SIZE : shuffled_position_overall
-        
-        cards_to_create << {
-          owner_character_id: character.id,
-          template_id: template.id,
-          location: location.to_s,
-          position: position_in_location,
-          target_type_enum: template.target_type_enum,
-          target_count_min: template.target_count_min,
-          target_count_max: template.target_count_max,
-          target_condition_key: template.target_condition_key,
-          created_at: Time.current,
-          updated_at: Time.current
-        }
-        current_idx += 1
-      end
-    end
-    Card.insert_all(cards_to_create, unique_by: :id) if cards_to_create.any?
-    character.reload
   end
 
   def broadcast_game_state(game_id, event_message = nil)

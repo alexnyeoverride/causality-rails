@@ -55,4 +55,3 @@ class Action < ApplicationRecord
     self
   end
 end
-
