@@ -239,7 +239,8 @@ CREATE TABLE public.games (
     id bigint NOT NULL,
     current_character_id bigint,
     created_at timestamp(6) without time zone DEFAULT now() NOT NULL,
-    updated_at timestamp(6) without time zone DEFAULT now() NOT NULL
+    updated_at timestamp(6) without time zone DEFAULT now() NOT NULL,
+    next_main_turn_character_id_stashed_id bigint
 );
 
 
@@ -489,6 +490,13 @@ CREATE INDEX index_characters_on_game_id ON public.characters USING btree (game_
 
 
 --
+-- Name: index_games_on_next_main_turn_character_id_stashed_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_games_on_next_main_turn_character_id_stashed_id ON public.games USING btree (next_main_turn_character_id_stashed_id);
+
+
+--
 -- Name: index_templates_on_name; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -592,12 +600,21 @@ ALTER TABLE ONLY public.action_card_targets
 
 
 --
+-- Name: games fk_rails_cae1c335e2; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.games
+    ADD CONSTRAINT fk_rails_cae1c335e2 FOREIGN KEY (next_main_turn_character_id_stashed_id) REFERENCES public.characters(id) ON DELETE SET NULL;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20250527061759'),
 ('20250526203912'),
 ('20250526191050'),
 ('20250526161111'),
