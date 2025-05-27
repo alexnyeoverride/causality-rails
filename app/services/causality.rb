@@ -50,7 +50,9 @@ class Causality
       .includes(
         :trigger,
         { card: :template },
-        :source
+        :source,
+        :character_targets,
+        :card_targets
       )
       .order(:id)
 

@@ -21,10 +21,8 @@ module BehaviorRegistry
       end
     },
     'declarable_if_trigger_targets_self' => ->(game, action) {
-      return false unless action.trigger_id && action.source_id
-      trigger_action = game.actions.find_by(id: action.trigger_id)
-      return false unless trigger_action
-      trigger_action.character_target_ids.include?(action.source_id)
+      return false unless action.trigger
+      action.trigger.character_target_ids.include?(action.source_id)
     },
     'declarable_if_self_health_below_percentage' => ->(game, action) {
       source_char = game.characters.find_by(id: action.source_id)
@@ -33,13 +31,12 @@ module BehaviorRegistry
     'declarable_if_trigger_is_card_name' => ->(game, action) {
       expected_card_name = action.card.template.target_condition_key
       return false unless action.trigger_id && expected_card_name.present?
-      trigger_action = game.actions.find_by(id: action.trigger_id)
+      trigger_action = action.trigger
       return false unless trigger_action&.card&.template
       trigger_action.card.template.name == expected_card_name
     },
     'declarable_if_trigger_action_not_resolved_or_failed' => ->(game, action) {
-      return false unless action.trigger_id
-      trigger_action = game.actions.find_by(id: action.trigger_id)
+      trigger_action = action.trigger
       return false unless trigger_action
       !['resolved', 'failed'].include?(trigger_action.phase.to_s)
     },
@@ -93,10 +90,7 @@ module BehaviorRegistry
       card_to_return = trigger.card
       owner = trigger.source
       game.causality.fail_recursively!(action.trigger.id)
-      # TODO use the card manager helper for transfering location
-      max_pos = owner.cards.where(location: 'hand').maximum(:position) || -1
-      new_pos = (max_pos || -1) + 1
-      card_to_return.update!(location: 'hand', position: new_pos)
+      card_manager.transfer_card_to_location!(card_to_return, :hand)
     },
     'deal_variadic_damage_to_targets_and_fixed_to_source' => ->(game, action) {
       target_damage = action.max_tick_count > 0 ? action.max_tick_count : 1
