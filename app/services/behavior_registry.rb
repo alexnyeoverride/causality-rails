@@ -87,10 +87,8 @@ module BehaviorRegistry
     'return_trigger_card_to_hand' => ->(game, action) {
       trigger = action.trigger
       return unless trigger && trigger.source && trigger.card
-      card_to_return = trigger.card
-      owner = trigger.source
       game.causality.fail_recursively!(action.trigger.id)
-      card_manager.transfer_card_to_location!(card_to_return, :hand)
+      trigger.source.card_manager.transfer_card_to_location!(trigger.card, :hand)
     },
     'deal_variadic_damage_to_targets_and_fixed_to_source' => ->(game, action) {
       target_damage = action.max_tick_count > 0 ? action.max_tick_count : 1
