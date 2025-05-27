@@ -123,19 +123,9 @@ class Game < ApplicationRecord
 
         spent_last_of_resource = source_character.spend_resource_for_action!(action_to_process)
 
-        is_reaction = !action_to_process.trigger_id.nil?
-        should_advance_initiative = false
-        if is_reaction
-          should_advance_initiative = true
-        elsif spent_last_of_resource
-          should_advance_initiative = true
-        end
-
-        if should_advance_initiative
-          initiative.advance!(is_reaction_phase: is_reaction)
-          # TODO: notify client of initiative advancement
-          self.reload
-        end
+        initiative.advance!(is_reaction_phase: action_to_process.trigger_id)
+        # TODO: notify client of initiative advancement
+        self.reload
       end
     end
 
