@@ -55,7 +55,7 @@ const Game: React.FC<GameProps> = ({ websocket }) => {
         }
       },
       received: (data: any) => {
-        setLastMessage(`Received: ${JSON.stringify(data, null, 2).substring(0, 300)}...`);
+        setLastMessage(JSON.stringify(data, null, 2));
         switch (data.type) {
           case 'joined':
           case 'rejoined':
