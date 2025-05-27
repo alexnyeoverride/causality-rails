@@ -17,11 +17,22 @@ class Initiative
     initial_char_candidate
   end
 
-  def advance!(is_reaction_phase: false)
+  def advance!(is_reaction_phase: false, just_finished_reaction_phase: false)
     alive_characters = game.characters.alive.order(:id).to_a
     return nil if alive_characters.empty?
 
     current_char_obj = game.current_character
+
+    if just_finished_reaction_phase
+      character = Character.alive.where('actions_remaining > 0').where(id: game.next_main_turn_character_id_stashed_id).first
+      if character
+        game.update(current_character: character)
+        return
+      elsif game.next_main_turn_character_id_stashed_id
+        current_char_obj = Character.find(game.next_main_turn_character_id_stashed_id)
+      end
+    end
+
     start_index = current_char_obj ? alive_characters.index(current_char_obj) : -1
 
     (0...alive_characters.size).each do |i|

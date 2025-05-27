@@ -58,19 +58,9 @@ RSpec.describe Game, type: :model do
       expect(card_in_hand.target_condition_key).to eq(card_in_hand.template.target_condition_key)
     end
 
-    it 'results in a shuffled distribution of cards (probabilistic check)' do
-      all_templates_in_creation_order = []
-      Game::CARDS_PER_TEMPLATE_IN_DECK.times do
-        all_templates_in_creation_order.concat(Template.order(:id).to_a) 
-      end
-
-      char1_hand_template_ids = char1.hand.cards.order(:position).map(&:template_id)
-      first_n_template_ids_if_not_shuffled = all_templates_in_creation_order.first(Game::STARTING_HAND_SIZE).map(&:id)
-      
-      total_templates_count = Template.count
-      if total_templates_count > 1 && Game::STARTING_HAND_SIZE < (Game::CARDS_PER_TEMPLATE_IN_DECK * total_templates_count) && Game::STARTING_HAND_SIZE > 0
-        expect(char1_hand_template_ids).not_to eq(first_n_template_ids_if_not_shuffled)
-      end
+    it 'results in a shuffled distribution of cards' do
+      allow_any_instance_of(Array).to receive(:shuffle) {|a| a.rotate(1) }
+      expect(Card.where(owner_character_id: char1).order(:position).pluck :id).not_to eq(Card.where(owner_character_id: char1).order(:id).pluck :id)
     end
 
     it 'sets the current character for the game if it was not set' do

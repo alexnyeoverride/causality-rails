@@ -366,7 +366,7 @@ RSpec.describe 'Game Flow and Action Declaration', type: :integration do
           expected_trigger_phase: 'resolved',
           expected_remaining_actions: 2,
           expected_remaining_reactions: 0,
-          expected_next_char: char3,
+          expected_next_char: char2,
           is_skip: false
         )
         # char1 is out of reactions

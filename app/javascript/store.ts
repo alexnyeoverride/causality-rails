@@ -1,3 +1,6 @@
+// TODO: don't need to use RPC for animations.  useEffect can watch values in the store for changes and animate when they happen.
+
+
 import { create } from 'zustand';
 import type { Subscription } from '@rails/actioncable';
 

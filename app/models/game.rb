@@ -69,6 +69,8 @@ class Game < ApplicationRecord
     end
     action_to_process.source = source_character
 
+    # TODO: validate source_character is current_character
+
     card_record = source_character.cards.find_by(id: card_id)
     unless card_record
       action_to_process.errors.add(:base, "Card not found for character.")
@@ -109,61 +111,24 @@ class Game < ApplicationRecord
     is_root_action = action_to_process.trigger_id.nil?
 
     ActiveRecord::Base.transaction do
+      if is_root_action
+        update(next_main_turn_character_id_stashed_id: current_character.id)
+      end
+
       causality.add(action_to_save: action_to_process)
+      spent_last_action_point_for_turn = source_character.spend_resource_for_action!(action_to_process)
+      all_characters_out_of_reactions = self.characters.alive.where.not(reactions_remaining: 0).none?
 
-      if action_to_process.persisted?
-        source_character.card_manager.transfer_card_to_location!(card_record, :table)
-        spent_last_action_point_for_turn = source_character.spend_resource_for_action!(action_to_process)
-
-        if is_root_action
-          current_game_state_for_stash_check = Game.find(self.id)
-          initiative_for_peeking = Initiative.new(current_game_state_for_stash_check)
-          actor_for_stash_check = characters.alive.find { |c| c.id == source_character_id }
-
-          if actor_for_stash_check
-            if spent_last_action_point_for_turn || actor_for_stash_check.actions_remaining == 0
-              next_main_actor = initiative_for_peeking.find_next_character_for_phase(actor_for_stash_check, false)
-              self.next_main_turn_character_id_stashed_id = next_main_actor&.id
-            else
-              self.next_main_turn_character_id_stashed_id = actor_for_stash_check.id
-            end
-            self.save!(touch: false) if self.changed_for_autosave?
-          end
-        end
-
-        initiative.advance!(is_reaction_phase: !is_root_action)
-        self.reload
-      else
-        return action_to_process
-      end
-    end
-
-    if action_to_process.persisted?
-      no_pending_triggers = causality.get_next_trigger.nil?
-      all_characters_out_of_reactions = self.characters.reload.alive.all? { |c| c.reactions_remaining == 0 }
-
-      if no_pending_triggers || all_characters_out_of_reactions
+      just_finished_reaction_phase = false
+      if all_characters_out_of_reactions
         process_actions!
-
-        is_reaction_cascade_fully_complete = causality.get_next_trigger.nil? &&
-                                            self.characters.reload.alive.all? { |c| c.reactions_remaining == 0 } &&
-                                            !self.actions.where.not(phase: ['resolved', 'failed']).exists?
-
-        if is_reaction_cascade_fully_complete
-          stashed_id = self.next_main_turn_character_id_stashed_id
-          if stashed_id
-            stashed_next_player = self.characters.reload.find_by(id: stashed_id)
-            if stashed_next_player&.alive? && stashed_next_player.actions_remaining > 0
-              self.update!(current_character: stashed_next_player)
-            else
-              self.initiative.advance!(is_reaction_phase: false)
-            end
-          else
-            self.initiative.advance!(is_reaction_phase: false)
-          end
-          self.update!(next_main_turn_character_id_stashed_id: nil)
-        end
+        just_finished_reaction_phase = true
       end
+
+      source_character.card_manager.transfer_card_to_location!(card_record, :table)
+
+      initiative.advance!(is_reaction_phase: causality.get_next_trigger, just_finished_reaction_phase: just_finished_reaction_phase)
+      self.reload
     end
     return action_to_process
   end
