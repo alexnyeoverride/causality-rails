@@ -17,8 +17,8 @@ Template.find_or_create_by!(name: "Pass") do |template|
   template.is_free = true
   template.declarability_key = "default_declarability"
   template.tick_condition_key = "default_tick_condition"
-  template.tick_effect_key = "pass_effect" # Simple effect
-  template.max_tick_count = 0 # No ticks needed for Pass
+  template.tick_effect_key = "pass_effect"
+  template.max_tick_count = 0
 end
 
 Template.find_or_create_by!(name: "Quick Shot") do |template|
@@ -27,8 +27,8 @@ Template.find_or_create_by!(name: "Quick Shot") do |template|
   template.is_free = false
   template.declarability_key = "default_declarability"
   template.tick_condition_key = "tick_if_target_still_alive"
-  template.tick_effect_key = "deal_direct_damage_based_on_template" # MODIFIED KEY
-  template.max_tick_count = 1 # This is the damage magnitude
+  template.tick_effect_key = "deal_direct_damage_based_on_template"
+  template.max_tick_count = 1
 end
 
 Template.find_or_create_by!(name: "Heavy Blast") do |template|
@@ -37,8 +37,8 @@ Template.find_or_create_by!(name: "Heavy Blast") do |template|
   template.is_free = false
   template.declarability_key = "default_declarability"
   template.tick_condition_key = "tick_if_target_still_alive"
-  template.tick_effect_key = "deal_direct_damage_based_on_template" # MODIFIED KEY
-  template.max_tick_count = 3 # This is the damage magnitude
+  template.tick_effect_key = "deal_direct_damage_based_on_template"
+  template.max_tick_count = 3
 end
 
 Template.find_or_create_by!(name: "Exploit Opening") do |template|
@@ -47,15 +47,9 @@ Template.find_or_create_by!(name: "Exploit Opening") do |template|
   template.is_free = false
   template.declarability_key = "declarable_if_target_is_damaged"
   template.tick_condition_key = "tick_if_target_still_alive"
-  template.tick_effect_key = "deal_direct_damage_based_on_template" # MODIFIED KEY
-  template.max_tick_count = 2 # This is the damage magnitude
+  template.tick_effect_key = "deal_direct_damage_based_on_template"
+  template.max_tick_count = 2
 end
-
-# --- Reactions ---
-# Retort: Deals damage to the source of its trigger. Magnitude from its template.
-# Deflection Shield: Redirects its trigger.
-# Emergency Return: Returns trigger's card to hand.
-# Timing Shift: Changes trigger's timing.
 
 Template.find_or_create_by!(name: "Deflection Shield") do |template|
   template.description = "Reaction\nWhen an opponent's action targets you: redirect that action to target them instead."
@@ -63,8 +57,8 @@ Template.find_or_create_by!(name: "Deflection Shield") do |template|
   template.is_free = false
   template.declarability_key = "declarable_if_trigger_targets_self"
   template.tick_condition_key = "declarable_if_trigger_action_not_resolved_or_failed"
-  template.tick_effect_key = "redirect_trigger_action_to_its_source" # This effect does not use trigger's max_tick_count
-  template.max_tick_count = 1 # This reaction instance ticks once
+  template.tick_effect_key = "redirect_trigger_action_to_its_source"
+  template.max_tick_count = 1
 end
 
 Template.find_or_create_by!(name: "Sacrificial Blow") do |template|
@@ -73,10 +67,10 @@ Template.find_or_create_by!(name: "Sacrificial Blow") do |template|
   template.is_free = false
   template.declarability_key = "default_declarability"
   template.tick_condition_key = "tick_if_target_still_alive"
-  # This key implies specific logic for target and source damage.
-  # If target damage is from template.max_tick_count, it should be initialized to tick once.
+ 
+ 
   template.tick_effect_key = "deal_variadic_damage_to_targets_and_fixed_to_source" 
-  template.max_tick_count = 4 # Magnitude for target damage
+  template.max_tick_count = 4
 end
 
 Template.find_or_create_by!(name: "Timing Shift") do |template|
@@ -86,7 +80,7 @@ Template.find_or_create_by!(name: "Timing Shift") do |template|
   template.declarability_key = "declarable_if_trigger_is_after_timing"
   template.tick_condition_key = "declarable_if_trigger_action_not_resolved_or_failed"
   template.tick_effect_key = "change_trigger_timing_to_before"
-  template.max_tick_count = 1 # This reaction instance ticks once
+  template.max_tick_count = 1
 end
 
 Template.find_or_create_by!(name: "Retort") do |template|
@@ -94,10 +88,10 @@ Template.find_or_create_by!(name: "Retort") do |template|
   template.resolution_timing = "before"
   template.is_free = false
   template.declarability_key = "declarable_if_trigger_targets_self"
-  template.tick_condition_key = "tick_if_target_still_alive" # Target is trigger's source
-  # This effect implies its magnitude is from Retort's template.max_tick_count
+  template.tick_condition_key = "tick_if_target_still_alive"
+ 
   template.tick_effect_key = "deal_damage_to_trigger_source_from_max_tick_count" 
-  template.max_tick_count = 2 # Magnitude of damage
+  template.max_tick_count = 2
 end
 
 Template.find_or_create_by!(name: "Emergency Return") do |template|
@@ -107,8 +101,5 @@ Template.find_or_create_by!(name: "Emergency Return") do |template|
   template.declarability_key = "declarable_if_self_health_below_percentage"
   template.tick_condition_key = "declarable_if_trigger_action_not_resolved_or_failed"
   template.tick_effect_key = "return_trigger_card_to_hand"
-  template.max_tick_count = 1 # This reaction instance ticks once
+  template.max_tick_count = 1
 end
-
-puts "Seeded #{Template.count} card templates."
-
