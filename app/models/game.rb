@@ -151,6 +151,8 @@ class Game < ApplicationRecord
       
       break unless tickable_action
 
+      # TODO: need to run `can_tick?` before ticking the action, in case e.g.
+      # the source died since declaring it.  If not can tick, fail recursively.`
       tickable_action.on_tick!
 
       if tickable_action.max_tick_count.present? && tickable_action.max_tick_count > 0
