@@ -34,8 +34,8 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm install
       - name: Set up database schema
-        run: bin/rails db:schema:load
+        run: bundle exec rails db:schema:load
       - name: Run Ruby tests
-        run: bin/rake
+        run: bundle exec rspec
       - name: Run frontend tests
         run: npm run test
